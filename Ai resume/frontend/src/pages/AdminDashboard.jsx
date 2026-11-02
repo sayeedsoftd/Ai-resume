@@ -21,6 +21,7 @@ import {
   Sliders,
   LayoutDashboard,
   ArrowRight,
+  RefreshCw,
 } from 'lucide-react';
 import api from '../services/api';
 import { kycService } from '../services/kycService';
@@ -65,6 +66,10 @@ export default function AdminDashboard({ defaultTab = 'overview' }) {
   const handleTabChange = (newTab) => {
     setActiveTab(newTab);
     setSearchParams({ tab: newTab });
+    if (newTab === 'jobs' || newTab === 'overview') {
+      loadStats();
+      loadAllJobs();
+    }
   };
   const [stats, setStats] = useState({
     total_users: 0,
@@ -121,7 +126,10 @@ export default function AdminDashboard({ defaultTab = 'overview' }) {
   const loadAllJobs = async () => {
     try {
       const data = await jobService.getAllJobsAdmin();
-      setAllJobs(data);
+      const validJobs = Array.isArray(data)
+        ? data.filter((j) => !j.is_deleted && j.status !== 'DELETED')
+        : [];
+      setAllJobs(validJobs);
     } catch (e) {
       console.error('All jobs error', e);
     }
@@ -550,15 +558,31 @@ export default function AdminDashboard({ defaultTab = 'overview' }) {
       {/* TAB 2: Job Listings Oversight (Strict Data Anonymization & Metric Aggregates) */}
       {activeTab === 'jobs' && (
         <Card>
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Requisitions Oversight (Data Anonymized)
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Requisitions Oversight (Data Anonymized)
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                  {allJobs.length} Requisitions
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Super Admin view contains aggregated engagement and scoring metrics only. Individual candidate dossiers, CVs, and answer sheets are strictly segregated for candidate privacy.
               </p>
             </div>
+            <button
+              onClick={() => {
+                loadAllJobs();
+                loadStats();
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              title="Refresh job listings and system metrics"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Refresh
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">

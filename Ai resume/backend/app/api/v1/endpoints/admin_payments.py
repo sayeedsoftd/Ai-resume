@@ -21,6 +21,7 @@ from app.schemas.subscription import (
     PaymentTransactionResponse,
     RejectPaymentRequest,
 )
+from app.schemas.job import SuperAdminJobMetrics
 from app.utils.logger import logger
 
 router = APIRouter()
@@ -285,3 +286,51 @@ def delete_subscription_plan(
     plan.updated_at = datetime.now(timezone.utc)
     db.commit()
     return {"id": id, "success": True, "message": f"Plan '{plan.name}' has been retired from active listings."}
+
+
+# --- 4. Admin Jobs Oversight Aliases (/admin/jobs & /admin/jobs/all) ---
+
+@router.get("/admin/jobs", response_model=List[SuperAdminJobMetrics])
+@router.get("/admin/jobs/all", response_model=List[SuperAdminJobMetrics])
+def list_all_jobs_for_admin_alias(
+    admin_user: User = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    SUPER_ADMIN only alias endpoint for job requisitions oversight.
+    Filters out any deleted jobs.
+    """
+    from app.models.application import JobApplication
+
+    jobs = (
+        db.query(Job)
+        .filter((Job.is_deleted == False) | (Job.is_deleted == None))
+        .order_by(Job.created_at.desc())
+        .all()
+    )
+    results = []
+    for j in jobs:
+        apps = db.query(JobApplication).filter(JobApplication.job_id == j.id).all()
+        app_count = len(apps)
+        scores = [a.test_score for a in apps if a.test_score is not None]
+        avg_score = round(sum(scores) / len(scores), 1) if scores else None
+        recruiter_name = j.poster.full_name if j.poster else "Recruiter"
+
+        results.append(SuperAdminJobMetrics(
+            job_id=j.id,
+            title=j.title,
+            company_name=j.company_name,
+            recruiter_name=recruiter_name,
+            location=j.location,
+            job_type=j.job_type.value if hasattr(j.job_type, "value") else str(j.job_type),
+            is_active=j.is_active,
+            is_frozen=bool(j.is_frozen),
+            is_deleted=bool(j.is_deleted),
+            total_views=j.views_count or 0,
+            total_applicants_count=app_count,
+            average_candidate_score=avg_score,
+            passing_score=float(j.passing_score or 70.0),
+            has_manual_stage=bool(j.has_manual_stage),
+            created_at=j.created_at,
+        ))
+    return results

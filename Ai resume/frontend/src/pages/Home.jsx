@@ -26,9 +26,7 @@ const Home = () => {
     <div className="space-y-16 py-8">
       {/* Hero Header */}
       <section className="text-center max-w-4xl mx-auto space-y-6 pt-4">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
-          <Sparkles className="w-3.5 h-3.5 text-indigo-500 animate-pulse" /> Next-Gen AI Resume & Dual-Stage Hiring Platform
-        </div>
+        
 
         <h1 className="text-4xl sm:text-6xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight">
           Supercharge Hiring & Careers with <br />

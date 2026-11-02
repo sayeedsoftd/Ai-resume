@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Sparkles,
   CreditCard,
+  Building2,
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -26,18 +27,25 @@ const Sidebar = () => {
   const [searchParams] = useSearchParams();
   const currentTab = searchParams.get('tab');
 
+  const isRecruiterOrAdmin =
+    user?.role === 'RECRUITER' ||
+    user?.role === 'SUPER_ADMIN' ||
+    isSuperAdmin ||
+    isSubscriber;
+
   // 1. Super Admin View Navigation with distinct paths and explicit tabKey
   const adminNav = [
     { name: 'Admin Overview', path: '/admin', tabKey: 'overview', icon: LayoutDashboard },
     { name: 'KYC Moderation', path: '/admin/kyc', tabKey: 'kyc', icon: UserCheck },
     { name: 'Payment & Recruiter KYC', path: '/admin/payments', tabKey: 'payments', icon: ShieldAlert },
+    { name: 'Recruiter Dashboard', path: '/recruiter', icon: Building2 },
     { name: 'Job Requisitions', path: '/jobs', icon: Briefcase },
     { name: 'System Resumes', path: '/resumes', icon: FileText },
   ];
 
   // 2. Recruiter View Navigation (for SUBSCRIBERS / RECRUITERS)
   const recruiterNav = [
-    { name: 'Recruiter Command Board', path: '/recruiter', icon: Briefcase },
+    { name: 'Recruiter Dashboard', path: '/recruiter', icon: Building2 },
     { name: 'Public Job Board', path: '/jobs', icon: Users },
     { name: 'Candidate Tracker', path: '/dashboard?tab=tracker', icon: Send },
     { name: 'My Profile', path: '/profile', icon: User },
@@ -46,6 +54,9 @@ const Sidebar = () => {
   // 3. Standard Candidate View Navigation
   const candidateNav = [
     { name: 'Candidate Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    ...(isRecruiterOrAdmin
+      ? [{ name: 'Recruiter Dashboard', path: '/recruiter', icon: Building2 }]
+      : []),
     { name: 'Live Resume Builder', path: '/resume-builder', icon: Sparkles },
     { name: 'My Resumes & ATS', path: '/resumes', icon: FileText },
     { name: 'Find Job Matches', path: '/jobs', icon: Briefcase },
@@ -70,6 +81,10 @@ const Sidebar = () => {
 
   // Strict active matching to prevent simultaneous multi-item selection
   const isNavActive = (item) => {
+    if (item.path === '/recruiter') {
+      return location.pathname === '/recruiter';
+    }
+
     if (isSuperAdmin && viewMode === 'admin') {
       if (item.tabKey === 'overview') {
         return (
@@ -117,9 +132,6 @@ const Sidebar = () => {
     if (item.path === '/dashboard?tab=tracker') {
       return location.pathname === '/dashboard' && currentTab === 'tracker';
     }
-    if (item.path === '/recruiter') {
-      return location.pathname === '/recruiter';
-    }
     if (item.path === '/jobs') {
       return location.pathname === '/jobs' || location.pathname.startsWith('/jobs/');
     }
@@ -133,7 +145,7 @@ const Sidebar = () => {
     if (isSuperAdmin && viewMode === 'admin') {
       return 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 font-bold shadow-sm';
     }
-    if (viewMode === 'recruiter') {
+    if (viewMode === 'recruiter' || location.pathname === '/recruiter') {
       return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold shadow-sm';
     }
     return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold shadow-sm';

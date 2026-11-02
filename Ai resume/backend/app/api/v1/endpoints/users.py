@@ -84,8 +84,12 @@ def get_admin_analytics(
 
     total_users = db.query(User).count()
     subscribers = db.query(User).filter(User.role == "SUBSCRIBER").count()
-    total_jobs = db.query(Job).count()
-    active_jobs = db.query(Job).filter(Job.is_active == True).count()
+    total_jobs = db.query(Job).filter((Job.is_deleted == False) | (Job.is_deleted == None)).count()
+    active_jobs = db.query(Job).filter(
+        Job.is_active == True,
+        (Job.is_frozen == False) | (Job.is_frozen == None),
+        (Job.is_deleted == False) | (Job.is_deleted == None),
+    ).count()
     total_applications = db.query(JobApplication).count()
     pending_kyc = db.query(KYCVerification).filter(KYCVerification.status == KYCStatus.PENDING).count()
     total_resumes = db.query(Resume).count()

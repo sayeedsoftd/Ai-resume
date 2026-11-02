@@ -67,9 +67,7 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand Logo */}
         <Link to="/" className="flex items-center gap-2.5">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-500/20">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
+          
           <span className="font-bold text-lg bg-gradient-to-r from-slate-900 via-indigo-950 to-indigo-700 dark:from-white dark:via-indigo-200 dark:to-indigo-400 bg-clip-text text-transparent">
             ResumeAI Match
           </span>
@@ -94,12 +92,6 @@ const Navbar = () => {
             className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1.5"
           >
             <FileSpreadsheet className="w-4 h-4 text-indigo-500" /> Resume Builder
-          </Link>
-          <Link
-            to="/pricing"
-            className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1.5"
-          >
-            <Sparkles className="w-4 h-4 text-amber-500" /> Post a Job / Pricing
           </Link>
           <Link
             to="/profile"

@@ -37,6 +37,8 @@ def init_db_and_seed():
             job_cols = [c["name"] for c in insp.get_columns("jobs")]
             if "is_frozen" not in job_cols:
                 conn.execute(text("ALTER TABLE jobs ADD COLUMN is_frozen BOOLEAN NOT NULL DEFAULT FALSE"))
+            if "is_deleted" not in job_cols:
+                conn.execute(text("ALTER TABLE jobs ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE"))
 
             # Widen notifications type column
             conn.execute(text("ALTER TABLE notifications MODIFY COLUMN type VARCHAR(50) NOT NULL DEFAULT 'SYSTEM'"))

@@ -61,6 +61,7 @@ def list_jobs(
     query = db.query(Job).filter(
         Job.is_active == True,
         (Job.is_frozen == False) | (Job.is_frozen == None),
+        (Job.is_deleted == False) | (Job.is_deleted == None),
     )
 
     if q:
@@ -469,6 +470,7 @@ def get_career_roadmap_for_job(
     return roadmap
 
 
+@router.get("/recruiter", response_model=List[dict])
 @router.get("/recruiter/my-posted-jobs", response_model=List[dict])
 def get_my_posted_jobs(
     current_user: User = Depends(require_subscriber_or_admin),
@@ -483,7 +485,10 @@ def get_my_posted_jobs(
 
     jobs = (
         db.query(Job)
-        .filter(Job.posted_by_user_id == current_user.id)
+        .filter(
+            Job.posted_by_user_id == current_user.id,
+            (Job.is_deleted == False) | (Job.is_deleted == None),
+        )
         .order_by(Job.created_at.desc())
         .all()
     )
@@ -544,10 +549,16 @@ def delete_job(
     db: Session = Depends(get_db),
 ):
     """
-    Recruiter endpoint: Safely delete a single targeted job specified by job_id.
-    - Verifies requesting recruiter ownership.
-    - Notifies only the applicants who applied to this specific job_id.
-    - Safely removes only this specific job and its dependent records without affecting any other jobs.
+    Recruiter endpoint: Permanently delete a single targeted job specified by job_id.
+    - Verifies requesting recruiter ownership (or Super Admin).
+    - Permanent Cascade Cleanup:
+      * Breaks circular foreign keys in job_applications.
+      * Deletes candidate test submissions (CandidateTestSubmission).
+      * Deletes AI screening assessment & generated question cache (JobAssessment).
+      * Deletes candidate job applications (JobApplication).
+      * Deletes notifications directly tied to this job instance.
+      * Deletes the actual Job record itself completely from the database.
+    - Returns clean success confirmation payload.
     """
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
@@ -559,53 +570,50 @@ def delete_job(
     job_title = job.title
     company_name = job.company_name
 
-    # 1. Fetch only applicants for this specific job_id
-    applicants = db.query(JobApplication).filter(JobApplication.job_id == job_id).all()
-
-    # 2. Dispatch in-app notification to each applicant of this job
-    for applicant in applicants:
-        notification = Notification(
-            user_id=applicant.user_id,
-            title="Job Closed",
-            message=f"The job posting '{job_title}' at '{company_name}' that you applied for has been closed and removed by the recruiter.",
-            type=NotificationType.JOB,
-        )
-        db.add(notification)
-
-    # 3. Clean up dependent records strictly for this specific job_id
+    # 1. Break circular FK reference in job_applications for this job
     from app.models.assessment import JobAssessment, CandidateTestSubmission
 
-    # Break circular FK reference in job_applications for this job
     db.query(JobApplication).filter(JobApplication.job_id == job_id).update(
         {"candidate_test_submission_id": None},
         synchronize_session=False,
     )
     db.flush()
 
-    # Delete test submissions, assessments, and applications strictly for this job_id
+    # 2. Delete test submissions and Stage-2 manual test submissions
     db.query(CandidateTestSubmission).filter(CandidateTestSubmission.job_id == job_id).delete(
         synchronize_session=False
     )
+
+    # 3. Delete AI screening generated questions cache & assessment config
     db.query(JobAssessment).filter(JobAssessment.job_id == job_id).delete(
         synchronize_session=False
     )
+
+    # 4. Delete candidate job applications
     db.query(JobApplication).filter(JobApplication.job_id == job_id).delete(
         synchronize_session=False
     )
 
-    # 4. Remove this specific job record only
+    # 5. Delete notifications directly tied to this job instance
+    db.query(Notification).filter(
+        (Notification.message.like(f"%{job_title}%")) | (Notification.title.like(f"%{job_title}%"))
+    ).delete(synchronize_session=False)
+
+    # 6. Delete the actual Job record completely from the database
     db.delete(job)
     db.commit()
 
     return {
-        "id": job_id,
+        "detail": "Job permanently deleted from entire system",
+        "job_id": job_id,
         "success": True,
-        "message": f"Job requisition '{job_title}' was successfully deleted. {len(applicants)} applicants were notified.",
-        "notified_applicants_count": len(applicants),
+        "message": f"Job requisition '{job_title}' was permanently deleted from entire system.",
     }
 
 
 @router.get("/admin/all", response_model=List[SuperAdminJobMetrics])
+@router.get("/admin/jobs", response_model=List[SuperAdminJobMetrics])
+@router.get("/admin", response_model=List[SuperAdminJobMetrics])
 def get_all_jobs_admin(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -615,11 +623,17 @@ def get_all_jobs_admin(
     Returns aggregated high-level metrics only:
     - Job Title, Recruiter Name, Total Views, Total Applicants Count, and Average Candidate Score.
     Strictly isolated from individual candidate lists, personal CVs, and test submissions.
+    Filters out any deleted jobs.
     """
     if current_user.role.value != "SUPER_ADMIN":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only.")
 
-    jobs = db.query(Job).order_by(Job.created_at.desc()).all()
+    jobs = (
+        db.query(Job)
+        .filter((Job.is_deleted == False) | (Job.is_deleted == None))
+        .order_by(Job.created_at.desc())
+        .all()
+    )
     results = []
     for j in jobs:
         apps = db.query(JobApplication).filter(JobApplication.job_id == j.id).all()
@@ -637,6 +651,8 @@ def get_all_jobs_admin(
             location=j.location,
             job_type=j.job_type.value if hasattr(j.job_type, "value") else str(j.job_type),
             is_active=j.is_active,
+            is_frozen=bool(j.is_frozen),
+            is_deleted=bool(j.is_deleted),
             total_views=j.views_count or 0,
             total_applicants_count=app_count,
             average_candidate_score=avg_score,

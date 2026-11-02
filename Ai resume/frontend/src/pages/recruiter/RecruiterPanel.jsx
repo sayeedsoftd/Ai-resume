@@ -290,7 +290,7 @@ export default function RecruiterPanel() {
     setDeletingJob(true);
     try {
       await jobService.deleteJob(jobToDelete.id);
-      // Filter out ONLY that deleted job from UI state without touching other jobs
+      // Immediately filter out the deleted job from local state list
       setPostedJobs((prev) => prev.filter((j) => j.id !== jobToDelete.id));
 
       if (selectedJobForReview?.id === jobToDelete.id) {
@@ -300,8 +300,8 @@ export default function RecruiterPanel() {
 
       triggerToast({
         id: Date.now(),
-        title: 'Job Deleted',
-        message: `Job requisition '${jobToDelete.title}' has been deleted and applicants notified.`,
+        title: 'Job permanently deleted',
+        message: `Job requisition '${jobToDelete.title}' has been permanently wiped from the entire system.`,
         type: 'JOB',
       });
       setJobToDelete(null);
@@ -1267,23 +1267,23 @@ export default function RecruiterPanel() {
         <Modal
           isOpen={Boolean(jobToDelete)}
           onClose={() => !deletingJob && setJobToDelete(null)}
-          title="Delete Job Requisition"
+          title="Permanently Delete Job?"
         >
           <div className="space-y-4">
-            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/50">
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60">
               <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-rose-900 dark:text-rose-200 space-y-1">
-                <p className="font-semibold text-sm">
+              <div className="text-xs text-rose-950 dark:text-rose-200 space-y-2">
+                <p className="font-bold text-sm text-rose-900 dark:text-rose-100">
                   Are you sure you want to delete "{jobToDelete.title}"?
                 </p>
-                <p>
-                  This action will permanently remove only this specific job listing. All{' '}
-                  <span className="font-bold">{jobToDelete.applicant_count || 0} applicants</span> will
-                  receive an automated notification that this job has been closed.
+                <p className="leading-relaxed">
+                  This action will permanently wipe this job requisition, along with all associated candidate applications and assessment submissions across Candidate, Recruiter, and Admin panels. This action cannot be reversed.
                 </p>
-                <p className="text-[11px] text-rose-700 dark:text-rose-400">
-                  All other jobs and general candidate profiles remain untouched.
-                </p>
+                {jobToDelete.applicant_count > 0 && (
+                  <p className="font-semibold text-rose-700 dark:text-rose-300">
+                    Associated {jobToDelete.applicant_count} applicant record{jobToDelete.applicant_count === 1 ? '' : 's'} and screening submissions will be wiped permanently.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1311,7 +1311,7 @@ export default function RecruiterPanel() {
                 ) : (
                   <>
                     <Trash2 className="w-4 h-4" />
-                    Confirm Delete
+                    Permanently Delete
                   </>
                 )}
               </Button>

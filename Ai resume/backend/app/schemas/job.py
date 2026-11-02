@@ -46,6 +46,8 @@ class JobResponse(JobBase):
     id: int
     posted_by_user_id: int
     views_count: Optional[int] = 0
+    is_frozen: Optional[bool] = False
+    is_deleted: Optional[bool] = False
     created_at: datetime
     updated_at: datetime
 
@@ -60,6 +62,8 @@ class SuperAdminJobMetrics(BaseModel):
     location: str
     job_type: str
     is_active: bool
+    is_frozen: Optional[bool] = False
+    is_deleted: Optional[bool] = False
     total_views: int
     total_applicants_count: int
     average_candidate_score: Optional[float] = None

@@ -116,9 +116,7 @@ const AuthPage = ({ initialTab = 'login' }) => {
       <div className="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         {/* Left Visual Branding Panel */}
         <div className="lg:col-span-6 space-y-6 hidden lg:block pr-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
-            <Sparkles className="w-3.5 h-3.5" /> Next-Gen Career Matching Engine
-          </div>
+          
 
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
             Step into the future of{' '}
@@ -127,9 +125,7 @@ const AuthPage = ({ initialTab = 'login' }) => {
             </span>
           </h1>
 
-          <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-            Upload your resume, unlock deep ATS compatibility scoring, verify your identity with KYC badges, and apply for positions with instant alignment diagnostics.
-          </p>
+          
 
           <div className="space-y-3 pt-2">
             <div className="flex items-center gap-3 text-xs text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
