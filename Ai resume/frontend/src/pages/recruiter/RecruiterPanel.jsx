@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Briefcase,
   PlusCircle,
@@ -19,8 +20,11 @@ import {
   Calendar,
   Trash2,
   AlertTriangle,
+  CreditCard,
+  RefreshCw,
 } from 'lucide-react';
 import { jobService } from '../../services/jobService';
+import { subscriptionService } from '../../services/subscriptionService';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
@@ -29,8 +33,10 @@ import { useNotifications } from '../../context/NotificationContext';
 import ApplicantDossierModal from '../../components/recruiter/ApplicantDossierModal';
 
 export default function RecruiterPanel() {
+  const navigate = useNavigate();
   const [postedJobs, setPostedJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [subscriptionInfo, setSubscriptionInfo] = useState(null);
   const [postModalOpen, setPostModalOpen] = useState(false);
   const [selectedJobForReview, setSelectedJobForReview] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -61,7 +67,17 @@ export default function RecruiterPanel() {
 
   useEffect(() => {
     fetchMyJobs();
+    fetchSubscription();
   }, []);
+
+  const fetchSubscription = async () => {
+    try {
+      const data = await subscriptionService.getMySubscription();
+      setSubscriptionInfo(data);
+    } catch (err) {
+      console.warn('Could not load recruiter subscription details', err);
+    }
+  };
 
   const fetchMyJobs = async () => {
     setLoading(true);
@@ -76,6 +92,11 @@ export default function RecruiterPanel() {
   };
 
   const handleOpenCreateModal = () => {
+    if (subscriptionInfo?.subscription_status === 'EXPIRED') {
+      alert('Your recruiter subscription has expired. Please renew your plan to post new job openings.');
+      navigate('/pricing');
+      return;
+    }
     setEditingJobId(null);
     setJobForm({
       title: '',
@@ -400,6 +421,102 @@ export default function RecruiterPanel() {
 
   return (
     <div className="space-y-6">
+      {/* Recruiter Subscription & Verification Lifecycle Banners */}
+      {subscriptionInfo?.subscription_status === 'PENDING' && (
+        <div className="p-4 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-900/60 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-sky-950 dark:text-sky-200">
+                Your Recruiter Verification is Pending Review by Super Admin
+              </h4>
+              <p className="text-xs text-sky-800 dark:text-sky-300 mt-0.5">
+                Your manual payment details and KYC Trade License have been submitted. You will be notified once approved.
+              </p>
+            </div>
+          </div>
+          <Link to="/pricing">
+            <Button size="sm" variant="secondary" className="border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300 hover:bg-sky-100">
+              Check Status
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {subscriptionInfo?.subscription_status === 'REJECTED' && (
+        <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-rose-950 dark:text-rose-200">
+                Payment & Recruiter Verification Rejected
+              </h4>
+              <p className="text-xs text-rose-800 dark:text-rose-300 mt-0.5">
+                Admin Note: <span className="font-semibold underline">{subscriptionInfo?.rejection_reason || 'Verification document or Transaction ID could not be confirmed.'}</span>
+              </p>
+            </div>
+          </div>
+          <Link to="/pricing">
+            <Button size="sm" className="bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-md whitespace-nowrap">
+              Re-submit Payment Details
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {subscriptionInfo?.subscription_status === 'ACTIVE' &&
+        subscriptionInfo?.days_left !== null &&
+        subscriptionInfo?.days_left !== undefined &&
+        subscriptionInfo?.days_left <= 7 && (
+          <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-amber-950 dark:text-amber-200">
+                  Subscription Expiring Soon ({subscriptionInfo.days_left} {subscriptionInfo.days_left === 1 ? 'day' : 'days'} left)
+                </h4>
+                <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                  Your recruiter subscription expires in {subscriptionInfo.days_left} day{subscriptionInfo.days_left === 1 ? '' : 's'}. Renew to prevent job freeze and preserve active applicant screening.
+                </p>
+              </div>
+            </div>
+            <Link to="/pricing">
+              <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-md whitespace-nowrap">
+                Renew Subscription
+              </Button>
+            </Link>
+          </div>
+        )}
+
+      {subscriptionInfo?.subscription_status === 'EXPIRED' && (
+        <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-red-950 dark:text-red-200">
+                Recruiter Subscription Expired
+              </h4>
+              <p className="text-xs text-red-800 dark:text-red-300 mt-0.5">
+                Your subscription has expired. Active job postings are currently frozen from candidate search. Renew now to reactivate all listings.
+              </p>
+            </div>
+          </div>
+          <Link to="/pricing">
+            <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white font-semibold shadow-md whitespace-nowrap">
+              Renew Subscription Now
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
@@ -473,6 +590,11 @@ export default function RecruiterPanel() {
                         >
                           {job.is_active ? 'Active' : 'Paused'}
                         </span>
+                        {job.is_frozen && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-black bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 border border-red-300 dark:border-red-800 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-red-600 dark:text-red-400" /> Frozen due to expired subscription
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-x-3 text-xs text-slate-500 dark:text-slate-400">

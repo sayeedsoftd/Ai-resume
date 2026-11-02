@@ -22,6 +22,7 @@ class Job(Base):
     job_type = Column(SQLEnum(JobType), default=JobType.FULL_TIME, nullable=False)
     salary_range = Column(String(100), nullable=True)  # e.g., "$80,000 - $110,000"
     is_active = Column(Boolean, default=True, nullable=False, index=True)
+    is_frozen = Column(Boolean, default=False, nullable=False, index=True)
 
     # Recruiter-Controlled Custom Assessment Pipeline Configuration
     passing_score = Column(Float, default=70.0, nullable=False) # Passing Score Benchmark (%)

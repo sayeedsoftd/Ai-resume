@@ -3,8 +3,30 @@ import enum
 
 class UserRole(str, enum.Enum):
     NORMAL_USER = "NORMAL_USER"
+    USER = "NORMAL_USER"
     SUBSCRIBER = "SUBSCRIBER"
+    RECRUITER = "RECRUITER"
     SUPER_ADMIN = "SUPER_ADMIN"
+
+
+class PaymentMethod(str, enum.Enum):
+    BKASH = "BKASH"
+    NAGAD = "NAGAD"
+    ROCKET = "ROCKET"
+    BANK_TRANSFER = "BANK_TRANSFER"
+
+
+class PaymentStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
+class SubscriptionStatus(str, enum.Enum):
+    NONE = "NONE"
+    PENDING = "PENDING"
+    ACTIVE = "ACTIVE"
+    EXPIRED = "EXPIRED"
 
 
 class KYCStatus(str, enum.Enum):
@@ -39,6 +61,8 @@ class NotificationType(str, enum.Enum):
     KYC = "KYC"
     JOB = "JOB"
     JOB_CLOSED = "JOB_CLOSED"
+    PAYMENT = "PAYMENT"
+    SUBSCRIPTION = "SUBSCRIPTION"
     BROADCAST = "BROADCAST"
 
 

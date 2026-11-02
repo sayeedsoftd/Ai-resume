@@ -32,13 +32,17 @@ const AuthPage = ({ initialTab = 'login' }) => {
   const [error, setError] = useState('');
 
   const redirectAfterAuth = (user) => {
-    const from = location.state?.from?.pathname;
+    const searchParams = new URLSearchParams(location.search);
+    const redirectParam = searchParams.get('redirect');
+    const from = location.state?.from?.pathname || redirectParam;
     if (from) {
       navigate(from, { replace: true });
       return;
     }
     if (user?.role === 'SUPER_ADMIN') {
       navigate('/admin');
+    } else if (user?.role === 'RECRUITER') {
+      navigate('/recruiter');
     } else {
       navigate('/dashboard');
     }

@@ -28,6 +28,8 @@ class UserResponse(BaseModel):
     full_name: str
     role: UserRole
     is_verified_badge: bool
+    subscription_status: Optional[str] = "NONE"
+    subscription_expires_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard,
@@ -16,25 +16,30 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  CreditCard,
 } from 'lucide-react';
 
 const Sidebar = () => {
   const { user, isSuperAdmin, isSubscriber, isVerified, viewMode } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const currentTab = searchParams.get('tab');
 
-  // 1. Super Admin View Navigation
+  // 1. Super Admin View Navigation with distinct paths and explicit tabKey
   const adminNav = [
-    { name: 'Admin Overview', path: '/admin', icon: LayoutDashboard },
-    { name: 'KYC Moderation', path: '/admin', icon: UserCheck },
+    { name: 'Admin Overview', path: '/admin', tabKey: 'overview', icon: LayoutDashboard },
+    { name: 'KYC Moderation', path: '/admin/kyc', tabKey: 'kyc', icon: UserCheck },
+    { name: 'Payment & Recruiter KYC', path: '/admin/payments', tabKey: 'payments', icon: ShieldAlert },
     { name: 'Job Requisitions', path: '/jobs', icon: Briefcase },
     { name: 'System Resumes', path: '/resumes', icon: FileText },
   ];
 
-  // 2. Recruiter View Navigation (for SUBSCRIBERS)
+  // 2. Recruiter View Navigation (for SUBSCRIBERS / RECRUITERS)
   const recruiterNav = [
     { name: 'Recruiter Command Board', path: '/recruiter', icon: Briefcase },
     { name: 'Public Job Board', path: '/jobs', icon: Users },
-    { name: 'Candidate Tracker', path: '/dashboard', icon: Send },
+    { name: 'Candidate Tracker', path: '/dashboard?tab=tracker', icon: Send },
     { name: 'My Profile', path: '/profile', icon: User },
   ];
 
@@ -62,6 +67,77 @@ const Sidebar = () => {
     panelTitle = 'Recruiter Portal';
     badgeColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300';
   }
+
+  // Strict active matching to prevent simultaneous multi-item selection
+  const isNavActive = (item) => {
+    if (isSuperAdmin && viewMode === 'admin') {
+      if (item.tabKey === 'overview') {
+        return (
+          (location.pathname === '/admin' && (!currentTab || currentTab === 'overview')) ||
+          location.pathname === '/admin/overview'
+        );
+      }
+      if (item.tabKey === 'kyc') {
+        return (
+          location.pathname === '/admin/kyc' ||
+          (location.pathname === '/admin' && currentTab === 'kyc')
+        );
+      }
+      if (item.tabKey === 'payments') {
+        return (
+          location.pathname === '/admin/payments' ||
+          (location.pathname === '/admin' && currentTab === 'payments')
+        );
+      }
+      if (item.tabKey === 'payment-settings') {
+        return (
+          location.pathname === '/admin/settings/payment' ||
+          (location.pathname === '/admin' && currentTab === 'payment-settings')
+        );
+      }
+      if (item.tabKey === 'plans') {
+        return (
+          location.pathname === '/admin/plans' ||
+          (location.pathname === '/admin' && currentTab === 'plans')
+        );
+      }
+      if (item.path === '/jobs') {
+        return location.pathname === '/jobs' || location.pathname.startsWith('/jobs/');
+      }
+      if (item.path === '/resumes') {
+        return location.pathname === '/resumes' || location.pathname.startsWith('/resumes/');
+      }
+      return location.pathname === item.path;
+    }
+
+    // Candidate and Recruiter paths
+    if (item.path === '/dashboard') {
+      return location.pathname === '/dashboard' && (!currentTab || currentTab !== 'tracker');
+    }
+    if (item.path === '/dashboard?tab=tracker') {
+      return location.pathname === '/dashboard' && currentTab === 'tracker';
+    }
+    if (item.path === '/recruiter') {
+      return location.pathname === '/recruiter';
+    }
+    if (item.path === '/jobs') {
+      return location.pathname === '/jobs' || location.pathname.startsWith('/jobs/');
+    }
+    return location.pathname === item.path;
+  };
+
+  const getActiveClass = (isActive) => {
+    if (!isActive) {
+      return 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100';
+    }
+    if (isSuperAdmin && viewMode === 'admin') {
+      return 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 font-bold shadow-sm';
+    }
+    if (viewMode === 'recruiter') {
+      return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold shadow-sm';
+    }
+    return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold shadow-sm';
+  };
 
   return (
     <aside
@@ -92,17 +168,16 @@ const Sidebar = () => {
         <div className="space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
+            const active = isNavActive(item);
+
             return (
               <NavLink
                 key={item.name}
                 to={item.path}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    isActive
-                      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-semibold shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
-                  } ${collapsed ? 'justify-center px-0' : ''}`
-                }
+                end={item.path === '/admin' || item.path === '/dashboard' || item.path === '/recruiter'}
+                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${getActiveClass(
+                  active
+                )} ${collapsed ? 'justify-center px-0' : ''}`}
                 title={collapsed ? item.name : undefined}
               >
                 <Icon className="w-4 h-4 shrink-0" />

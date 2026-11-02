@@ -95,5 +95,11 @@ class Settings(BaseSettings):
         path.mkdir(parents=True, exist_ok=True)
         return path
 
+    @property
+    def kyc_docs_upload_dir(self) -> Path:
+        path = self.UPLOAD_DIR / "kyc_docs"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
 
 settings = Settings()

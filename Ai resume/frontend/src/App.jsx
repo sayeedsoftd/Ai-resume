@@ -19,6 +19,7 @@ import Profile from './pages/Profile';
 import KYCVerification from './pages/KYCVerification';
 import AdminDashboard from './pages/AdminDashboard';
 import RecruiterPanel from './pages/recruiter/RecruiterPanel';
+import PricingCheckout from './pages/subscription/PricingCheckout';
 import NotFound from './pages/NotFound';
 
 // Protected Route Guard
@@ -87,6 +88,18 @@ function AppRoutes() {
             <JobDetail />
           </AppLayout>
         }
+      />
+      <Route
+        path="/pricing"
+        element={
+          <AppLayout>
+            <PricingCheckout />
+          </AppLayout>
+        }
+      />
+      <Route
+        path="/subscription"
+        element={<Navigate to="/pricing" replace />}
       />
 
       {/* Protected Pages */}
@@ -172,7 +185,57 @@ function AppRoutes() {
         element={
           <ProtectedRoute requireAdmin={true}>
             <AppLayout requireSidebar={true}>
-              <AdminDashboard />
+              <AdminDashboard defaultTab="overview" />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/overview"
+        element={
+          <ProtectedRoute requireAdmin={true}>
+            <AppLayout requireSidebar={true}>
+              <AdminDashboard defaultTab="overview" />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/kyc"
+        element={
+          <ProtectedRoute requireAdmin={true}>
+            <AppLayout requireSidebar={true}>
+              <AdminDashboard defaultTab="kyc" />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/payments"
+        element={
+          <ProtectedRoute requireAdmin={true}>
+            <AppLayout requireSidebar={true}>
+              <AdminDashboard defaultTab="payments" />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/settings/payment"
+        element={
+          <ProtectedRoute requireAdmin={true}>
+            <AppLayout requireSidebar={true}>
+              <AdminDashboard defaultTab="payment-settings" />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/plans"
+        element={
+          <ProtectedRoute requireAdmin={true}>
+            <AppLayout requireSidebar={true}>
+              <AdminDashboard defaultTab="plans" />
             </AppLayout>
           </ProtectedRoute>
         }

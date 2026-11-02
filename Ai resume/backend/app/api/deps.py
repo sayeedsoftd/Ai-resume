@@ -91,5 +91,5 @@ def require_role(roles: List[Union[UserRole, str]]) -> Callable[[User], User]:
 
 # Pre-built Role Dependencies
 require_super_admin = require_role([UserRole.SUPER_ADMIN])
-require_subscriber_or_admin = require_role([UserRole.SUBSCRIBER, UserRole.SUPER_ADMIN])
-require_normal_user = require_role([UserRole.NORMAL_USER, UserRole.SUBSCRIBER, UserRole.SUPER_ADMIN])
+require_subscriber_or_admin = require_role([UserRole.SUBSCRIBER, UserRole.RECRUITER, UserRole.SUPER_ADMIN])
+require_normal_user = require_role([UserRole.NORMAL_USER, UserRole.SUBSCRIBER, UserRole.RECRUITER, UserRole.SUPER_ADMIN])

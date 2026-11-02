@@ -21,6 +21,7 @@ import {
   HelpCircle,
   Check,
   RotateCcw,
+  Edit3,
 } from 'lucide-react';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';

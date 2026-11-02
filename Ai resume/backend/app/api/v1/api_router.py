@@ -9,6 +9,8 @@ from app.api.v1.endpoints import (
     applications,
     notifications,
     assessments,
+    subscriptions,
+    admin_payments,
 )
 
 api_router = APIRouter()
@@ -27,6 +29,11 @@ api_router.include_router(resumes.router, prefix="/resumes", tags=["Resumes & AI
 api_router.include_router(jobs.router, prefix="/jobs", tags=["Jobs & AI Match"])
 api_router.include_router(applications.router, prefix="/applications", tags=["Job Applications"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
+
+# Recruiter Subscriptions & Manual Payment Verification routes
+api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["Subscriptions & Payments"])
+api_router.include_router(subscriptions.router, prefix="", tags=["Subscriptions & Payments (Direct)"])
+api_router.include_router(admin_payments.router, prefix="", tags=["Super Admin Payment Moderation"])
 
 # Pre-Application Screening Assessments
 api_router.include_router(assessments.router, prefix="", tags=["Pre-Application Screening Assessments"])

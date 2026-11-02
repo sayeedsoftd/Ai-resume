@@ -20,7 +20,10 @@ import {
   Sparkles,
   Kanban,
   LayoutDashboard,
+  Clock,
+  AlertTriangle,
 } from 'lucide-react';
+import { subscriptionService } from '../services/subscriptionService';
 import JobMatchFinder from './dashboard/JobMatchFinder';
 import ApplicationTracker from './dashboard/ApplicationTracker';
 
@@ -42,6 +45,7 @@ const Dashboard = ({ defaultTab }) => {
   const [resumes, setResumes] = useState([]);
   const [applications, setApplications] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [subscriptionInfo, setSubscriptionInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Sync tab with URL search parameter
@@ -65,10 +69,11 @@ const Dashboard = ({ defaultTab }) => {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        const [resumesData, appsData, jobsData] = await Promise.allSettled([
+        const [resumesData, appsData, jobsData, subData] = await Promise.allSettled([
           resumeService.getResumes(),
           jobService.getMyApplications(),
           jobService.getJobs({ limit: 4 }),
+          subscriptionService.getMySubscription(),
         ]);
 
         if (resumesData.status === 'fulfilled' && Array.isArray(resumesData.value)) {
@@ -79,6 +84,9 @@ const Dashboard = ({ defaultTab }) => {
         }
         if (jobsData.status === 'fulfilled' && Array.isArray(jobsData.value)) {
           setJobs(jobsData.value);
+        }
+        if (subData.status === 'fulfilled' && subData.value) {
+          setSubscriptionInfo(subData.value);
         }
       } catch (err) {
         console.error('Error loading dashboard metrics:', err);
@@ -102,6 +110,53 @@ const Dashboard = ({ defaultTab }) => {
   return (
     <ErrorBoundary title="Dashboard error">
       <div className="space-y-6">
+        {/* Verification / Subscription Status Banner */}
+        {subscriptionInfo?.subscription_status === 'PENDING' && (
+          <div className="p-4 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-900/60 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-sky-950 dark:text-sky-200">
+                  Your Recruiter Verification is Pending Review by Super Admin
+                </h4>
+                <p className="text-xs text-sky-800 dark:text-sky-300 mt-0.5">
+                  Your payment details and KYC Trade License have been submitted. You will be notified once approved.
+                </p>
+              </div>
+            </div>
+            <Link to="/pricing">
+              <Button size="sm" variant="secondary" className="border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300">
+                View Submission
+              </Button>
+            </Link>
+          </div>
+        )}
+
+        {subscriptionInfo?.subscription_status === 'REJECTED' && (
+          <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-rose-950 dark:text-rose-200">
+                  Recruiter Payment / Verification Rejected
+                </h4>
+                <p className="text-xs text-rose-800 dark:text-rose-300 mt-0.5">
+                  Reason: <span className="font-semibold underline">{subscriptionInfo?.rejection_reason || 'Could not verify document or transaction.'}</span>
+                </p>
+              </div>
+            </div>
+            <Link to="/pricing">
+              <Button size="sm" className="bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-md whitespace-nowrap">
+                Re-submit Payment Details
+              </Button>
+            </Link>
+          </div>
+        )}
+
         {/* Top Banner */}
         <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-violet-900 rounded-2xl p-6 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg shadow-indigo-950/20">
           <div>

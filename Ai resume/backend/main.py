@@ -41,12 +41,8 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 @app.on_event("startup")
 def on_startup():
     logger.info(f"Starting {settings.PROJECT_NAME} in {settings.ENVIRONMENT} mode.")
-    try:
-        # Create tables automatically if database exists (for rapid dev environment)
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables verified/initialized successfully.")
-    except Exception as e:
-        logger.warning(f"Could not automatically create tables at startup (MySQL may be offline or migrating via Alembic): {e}")
+    from app.database.init_db import init_db_and_seed
+    init_db_and_seed()
 
 
 @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)

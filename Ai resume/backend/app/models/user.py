@@ -14,6 +14,8 @@ class User(Base):
     full_name = Column(String(150), nullable=False)
     role = Column(SQLEnum(UserRole), default=UserRole.NORMAL_USER, nullable=False)
     is_verified_badge = Column(Boolean, default=False, nullable=False)
+    subscription_status = Column(String(50), default="NONE", nullable=False, index=True)
+    subscription_expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(
         DateTime,
@@ -30,6 +32,12 @@ class User(Base):
     jobs = relationship("Job", back_populates="poster", cascade="all, delete-orphan")
     applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    payment_transactions = relationship(
+        "PaymentTransaction",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="desc(PaymentTransaction.created_at)",
+    )
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email={self.email} role={self.role}>"

@@ -47,6 +47,7 @@ def _sanitize_and_cap_manual_questions(raw_questions: Any) -> Optional[Any]:
 
 
 @router.get("/", response_model=List[JobResponse])
+@router.get("/public", response_model=List[JobResponse])
 def list_jobs(
     q: Optional[str] = Query(None, description="Search keyword in title or company"),
     location: Optional[str] = None,
@@ -56,8 +57,11 @@ def list_jobs(
     limit: int = 50,
     db: Session = Depends(get_db),
 ):
-    """List all active job postings with filtering and search capabilities."""
-    query = db.query(Job).filter(Job.is_active == True)
+    """List all active job postings with filtering and search capabilities (excluding frozen expired listings)."""
+    query = db.query(Job).filter(
+        Job.is_active == True,
+        (Job.is_frozen == False) | (Job.is_frozen == None),
+    )
 
     if q:
         search_filter = f"%{q}%"
@@ -79,9 +83,17 @@ def create_job(
     db: Session = Depends(get_db),
 ):
     """
-    Restricted to SUBSCRIBER and SUPER_ADMIN:
+    Restricted to active RECRUITER / SUBSCRIBER and SUPER_ADMIN:
     Publish a new job requisition with passing score benchmark and optional Stage-2 manual assessment questions.
+    Enforces active subscription check.
     """
+    from app.services.subscription_service import can_user_post_job
+    if not can_user_post_job(current_user, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your recruiter subscription has expired or is inactive. Please renew your plan to post new requisitions.",
+        )
+
     job = Job(
         posted_by_user_id=current_user.id,
         title=job_in.title,
@@ -287,9 +299,16 @@ def one_click_apply_job(
     One-click apply using user's primary resume.
     Automatically computes compatibility score and records application.
     """
-    job = db.query(Job).filter(Job.id == job_id, Job.is_active == True).first()
+    job = db.query(Job).filter(
+        Job.id == job_id,
+        Job.is_active == True,
+        (Job.is_frozen == False) | (Job.is_frozen == None),
+    ).first()
     if not job:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found or inactive.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found, inactive, or frozen due to subscription expiry.",
+        )
 
     primary_resume = (
         db.query(Resume)
@@ -457,8 +476,11 @@ def get_my_posted_jobs(
 ):
     """
     Recruiter panel: List all jobs posted by the current subscriber/admin,
-    including total applicant count, passing benchmark, and manual Stage-2 details.
+    including total applicant count, passing benchmark, frozen status, and manual Stage-2 details.
     """
+    from app.services.subscription_service import check_and_sync_subscription
+    check_and_sync_subscription(current_user, db)
+
     jobs = (
         db.query(Job)
         .filter(Job.posted_by_user_id == current_user.id)
@@ -480,6 +502,7 @@ def get_my_posted_jobs(
             "required_skills": j.required_skills or [],
             "description": j.description,
             "is_active": j.is_active,
+            "is_frozen": bool(j.is_frozen),
             "created_at": j.created_at,
             "applicant_count": app_count,
             "passing_score": j.passing_score if j.passing_score is not None else 70.0,

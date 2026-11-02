@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   ShieldAlert,
+  ShieldCheck,
   CheckCircle2,
   XCircle,
   Eye,
@@ -14,6 +16,11 @@ import {
   Send,
   AlertTriangle,
   FileCheck,
+  CreditCard,
+  Sparkles,
+  Sliders,
+  LayoutDashboard,
+  ArrowRight,
 } from 'lucide-react';
 import api from '../services/api';
 import { kycService } from '../services/kycService';
@@ -25,9 +32,40 @@ import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { useNotifications } from '../context/NotificationContext';
+import PaymentVerification from './admin/PaymentVerification';
+import PaymentSettings from './admin/PaymentSettings';
+import PlansManagement from './admin/PlansManagement';
 
-export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState('kyc'); // 'kyc' | 'jobs' | 'users' | 'broadcast'
+export default function AdminDashboard({ defaultTab = 'overview' }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const tabParam = searchParams.get('tab');
+
+  const getResolvedTab = () => {
+    if (tabParam) return tabParam;
+    if (location.pathname === '/admin/payments') return 'payments';
+    if (location.pathname === '/admin/kyc') return 'kyc';
+    if (location.pathname === '/admin/settings/payment') return 'payment-settings';
+    if (location.pathname === '/admin/plans') return 'plans';
+    if (location.pathname === '/admin/jobs') return 'jobs';
+    if (location.pathname === '/admin/users') return 'users';
+    if (location.pathname === '/admin/broadcast') return 'broadcast';
+    return defaultTab || 'overview';
+  };
+
+  const [activeTab, setActiveTab] = useState(getResolvedTab);
+
+  // Synchronize activeTab whenever route or search query parameter updates
+  useEffect(() => {
+    const resolved = getResolvedTab();
+    setActiveTab(resolved);
+  }, [location.pathname, tabParam, defaultTab]);
+
+  const handleTabChange = (newTab) => {
+    setActiveTab(newTab);
+    setSearchParams({ tab: newTab });
+  };
   const [stats, setStats] = useState({
     total_users: 0,
     subscribers: 0,
@@ -219,22 +257,70 @@ export default function AdminDashboard() {
       </div>
 
       {/* Admin Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('kyc')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          onClick={() => handleTabChange('overview')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === 'overview'
+              ? 'bg-rose-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <LayoutDashboard className="w-4 h-4" />
+          System Overview
+        </button>
+
+        <button
+          onClick={() => handleTabChange('kyc')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'kyc'
               ? 'bg-rose-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <FileCheck className="w-4 h-4" />
-          KYC Verifications ({kycList.length})
+          Candidate KYC ({kycList.length})
         </button>
 
         <button
-          onClick={() => setActiveTab('jobs')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          onClick={() => handleTabChange('payments')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === 'payments'
+              ? 'bg-rose-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          Recruiter Payments & Verification
+        </button>
+
+        <button
+          onClick={() => handleTabChange('payment-settings')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === 'payment-settings'
+              ? 'bg-rose-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          Payment Settings
+        </button>
+
+        <button
+          onClick={() => handleTabChange('plans')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+            activeTab === 'plans'
+              ? 'bg-rose-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          Subscription Plans
+        </button>
+
+        <button
+          onClick={() => handleTabChange('jobs')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'jobs'
               ? 'bg-rose-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -245,8 +331,8 @@ export default function AdminDashboard() {
         </button>
 
         <button
-          onClick={() => setActiveTab('users')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          onClick={() => handleTabChange('users')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'users'
               ? 'bg-rose-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -257,17 +343,125 @@ export default function AdminDashboard() {
         </button>
 
         <button
-          onClick={() => setActiveTab('broadcast')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          onClick={() => handleTabChange('broadcast')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'broadcast'
               ? 'bg-rose-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <Radio className="w-4 h-4" />
-          Live Broadcast Center
+          Broadcast Center
         </button>
       </div>
+
+      {/* TAB: System Overview Cockpit */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div
+              onClick={() => handleTabChange('kyc')}
+              className="cursor-pointer bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-rose-400 transition-all shadow-sm space-y-2 group"
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                  <FileCheck className="w-5 h-5" />
+                </div>
+                <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                  {stats.pending_kyc} Pending
+                </span>
+              </div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                Candidate KYC Moderation
+              </h3>
+              <p className="text-[11px] text-slate-500 line-clamp-2">
+                Inspect National IDs, passports, and facial recognition selfie matches.
+              </p>
+              <div className="pt-2 flex items-center gap-1 text-[11px] font-semibold text-rose-600 group-hover:translate-x-1 transition-transform">
+                Open Queue <ArrowRight className="w-3.5 h-3.5" />
+              </div>
+            </div>
+
+            <div
+              onClick={() => handleTabChange('payments')}
+              className="cursor-pointer bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-rose-400 transition-all shadow-sm space-y-2 group"
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                  Audit Center
+                </span>
+              </div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                Recruiter Payment & KYC
+              </h3>
+              <p className="text-[11px] text-slate-500 line-clamp-2">
+                Review submitted Trade License PDFs and verify bKash, Nagad, Rocket and Bank TrxIDs.
+              </p>
+              <div className="pt-2 flex items-center gap-1 text-[11px] font-semibold text-rose-600 group-hover:translate-x-1 transition-transform">
+                Review Payments <ArrowRight className="w-3.5 h-3.5" />
+              </div>
+            </div>
+
+            <div
+              onClick={() => handleTabChange('payment-settings')}
+              className="cursor-pointer bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-rose-400 transition-all shadow-sm space-y-2 group"
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                  Gateway
+                </span>
+              </div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                Payment Gateways
+              </h3>
+              <p className="text-[11px] text-slate-500 line-clamp-2">
+                Update receiver numbers for bKash, Nagad, Rocket, and corporate bank transfer credentials.
+              </p>
+              <div className="pt-2 flex items-center gap-1 text-[11px] font-semibold text-rose-600 group-hover:translate-x-1 transition-transform">
+                Configure Gateway <ArrowRight className="w-3.5 h-3.5" />
+              </div>
+            </div>
+
+            <div
+              onClick={() => handleTabChange('plans')}
+              className="cursor-pointer bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-rose-400 transition-all shadow-sm space-y-2 group"
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400">
+                  Tiers
+                </span>
+              </div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                Subscription Plans
+              </h3>
+              <p className="text-[11px] text-slate-500 line-clamp-2">
+                Create new recruiter subscription tiers, adjust pricing, and retire inactive offerings.
+              </p>
+              <div className="pt-2 flex items-center gap-1 text-[11px] font-semibold text-rose-600 group-hover:translate-x-1 transition-transform">
+                Manage Plans <ArrowRight className="w-3.5 h-3.5" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: Recruiter Payments & KYC */}
+      {activeTab === 'payments' && <PaymentVerification />}
+
+      {/* TAB: Payment Gateway Settings */}
+      {activeTab === 'payment-settings' && <PaymentSettings />}
+
+      {/* TAB: Subscription Plans Management */}
+      {activeTab === 'plans' && <PlansManagement />}
 
       {/* TAB 1: KYC Verifications */}
       {activeTab === 'kyc' && (
