@@ -18,10 +18,15 @@ import {
   Eye,
   Award,
   Calendar,
+  Video,
   Trash2,
   AlertTriangle,
   CreditCard,
   RefreshCw,
+  ShieldCheck,
+  Shield,
+  EyeOff,
+  User,
 } from 'lucide-react';
 import { jobService } from '../../services/jobService';
 import { subscriptionService } from '../../services/subscriptionService';
@@ -31,6 +36,12 @@ import Modal from '../../components/ui/Modal';
 import Badge from '../../components/ui/Badge';
 import { useNotifications } from '../../context/NotificationContext';
 import ApplicantDossierModal from '../../components/recruiter/ApplicantDossierModal';
+import ScheduleInterviewModal from '../../components/recruiter/ScheduleInterviewModal';
+import {
+  maskCandidateDetails,
+  getSavedBlindHiringPreference,
+  saveBlindHiringPreference,
+} from '../../utils/blindHiring';
 
 export default function RecruiterPanel() {
   const navigate = useNavigate();
@@ -42,7 +53,11 @@ export default function RecruiterPanel() {
   const [candidates, setCandidates] = useState([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [inspectingAppId, setInspectingAppId] = useState(null);
+  const [schedulingCandidateForPanel, setSchedulingCandidateForPanel] = useState(null);
   const [candidateFilter, setCandidateFilter] = useState('PASSED'); // 'PASSED' | 'FAILED' | 'ALL'
+  const [blindHiringActive, setBlindHiringActive] = useState(() =>
+    getSavedBlindHiringPreference(true)
+  );
   const [editingJobId, setEditingJobId] = useState(null);
   const [jobToDelete, setJobToDelete] = useState(null);
   const [deletingJob, setDeletingJob] = useState(false);
@@ -56,6 +71,12 @@ export default function RecruiterPanel() {
     job_type: 'FULL_TIME',
     experience_level: 'MID',
     salary_range: '',
+    category: 'Software Engineering',
+    workplace_type: 'ON_SITE',
+    min_salary: '',
+    max_salary: '',
+    is_salary_negotiable: false,
+    experience_years_required: 0,
     description: '',
     skillsInput: '',
     passing_score: 70,
@@ -105,6 +126,12 @@ export default function RecruiterPanel() {
       job_type: 'FULL_TIME',
       experience_level: 'MID',
       salary_range: '',
+      category: 'Software Engineering',
+      workplace_type: 'ON_SITE',
+      min_salary: '',
+      max_salary: '',
+      is_salary_negotiable: false,
+      experience_years_required: 0,
       description: '',
       skillsInput: '',
       passing_score: 70,
@@ -125,6 +152,12 @@ export default function RecruiterPanel() {
       job_type: job.job_type || 'FULL_TIME',
       experience_level: job.experience_level || 'MID',
       salary_range: job.salary_range || '',
+      category: job.category || 'Software Engineering',
+      workplace_type: job.workplace_type || 'ON_SITE',
+      min_salary: job.min_salary !== undefined && job.min_salary !== null ? String(job.min_salary) : '',
+      max_salary: job.max_salary !== undefined && job.max_salary !== null ? String(job.max_salary) : '',
+      is_salary_negotiable: Boolean(job.is_salary_negotiable),
+      experience_years_required: job.experience_years_required || 0,
       description: job.description || '',
       skillsInput: (job.required_skills || []).join(', '),
       passing_score:
@@ -231,13 +264,29 @@ export default function RecruiterPanel() {
           }
         : null;
 
+      // Format salary range
+      let calculatedSalary = jobForm.salary_range;
+      if (jobForm.is_salary_negotiable && !jobForm.min_salary) {
+        calculatedSalary = 'Negotiable';
+      } else if (jobForm.min_salary && jobForm.max_salary) {
+        calculatedSalary = `৳${Number(jobForm.min_salary).toLocaleString()} - ৳${Number(jobForm.max_salary).toLocaleString()}`;
+      } else if (jobForm.min_salary) {
+        calculatedSalary = `৳${Number(jobForm.min_salary).toLocaleString()}+`;
+      }
+
       const payload = {
         title: jobForm.title,
         company_name: jobForm.company_name,
-        location: jobForm.location || 'Remote',
+        location: jobForm.location || (jobForm.workplace_type === 'REMOTE' ? 'Remote' : 'Dhaka, Bangladesh'),
         job_type: jobForm.job_type,
         experience_level: jobForm.experience_level,
-        salary_range: jobForm.salary_range,
+        salary_range: calculatedSalary || 'Negotiable',
+        category: jobForm.category || 'Software Engineering',
+        workplace_type: jobForm.workplace_type || 'ON_SITE',
+        min_salary: jobForm.min_salary ? parseFloat(jobForm.min_salary) : null,
+        max_salary: jobForm.max_salary ? parseFloat(jobForm.max_salary) : null,
+        is_salary_negotiable: Boolean(jobForm.is_salary_negotiable),
+        experience_years_required: parseInt(jobForm.experience_years_required, 10) || 0,
         description: jobForm.description,
         required_skills: skillsArray,
         passing_score: parseFloat(jobForm.passing_score) || 70,
@@ -313,17 +362,34 @@ export default function RecruiterPanel() {
     }
   };
 
-  const handleReviewCandidates = async (job) => {
+  const handleReviewCandidates = async (job, isBlind = blindHiringActive) => {
     setSelectedJobForReview(job);
     setLoadingCandidates(true);
     try {
-      const data = await jobService.getJobApplications(job.id);
+      const data = await jobService.getJobApplications(job.id, isBlind);
       setCandidates(data);
     } catch (err) {
       console.error('Failed to load candidates', err);
     } finally {
       setLoadingCandidates(false);
     }
+  };
+
+  const handleToggleBlindHiring = () => {
+    const nextState = !blindHiringActive;
+    setBlindHiringActive(nextState);
+    saveBlindHiringPreference(nextState);
+    if (selectedJobForReview) {
+      handleReviewCandidates(selectedJobForReview, nextState);
+    }
+    triggerToast({
+      id: Date.now(),
+      title: nextState ? '🛡️ Blind Hiring Active' : 'Anti-Bias Mode Disabled',
+      message: nextState
+        ? 'Candidate personal demographics and identities are now masked.'
+        : 'Candidate real names and personal demographics are now visible.',
+      type: 'JOB',
+    });
   };
 
   const handleUpdateCandidateStatus = async (appId, newStatus) => {
@@ -715,20 +781,87 @@ export default function RecruiterPanel() {
                 </span>
               </div>
 
-              {/* Segmented Filter Tabs: Passed vs Failed vs All */}
+              {/* High-Visibility Blind Hiring (Anti-Bias Mode) Toggle Switch */}
+              <div className="p-3 rounded-2xl bg-gradient-to-r from-slate-50 via-slate-50 to-indigo-50/30 dark:from-slate-800/80 dark:via-slate-800/80 dark:to-indigo-950/20 border border-indigo-200/60 dark:border-indigo-900/40 flex items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                    blindHiringActive
+                      ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                  }`}>
+                    {blindHiringActive ? <ShieldCheck className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                        🛡️ Blind Hiring (Anti-Bias Mode)
+                      </span>
+                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
+                        blindHiringActive
+                          ? 'bg-emerald-500 text-slate-950 font-bold'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                      }`}>
+                        {blindHiringActive ? 'ACTIVE' : 'OFF'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">
+                      Mask candidate personal demographics to ensure objective, merit-based screening.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleToggleBlindHiring}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    blindHiringActive ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                  role="switch"
+                  aria-checked={blindHiringActive}
+                  title="Toggle Blind Hiring Anti-Bias Mode"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      blindHiringActive ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Informative Anti-Bias Banner when Active */}
+              {blindHiringActive && (
+                <div className="p-2.5 rounded-xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <p className="text-[11px] font-medium leading-snug">
+                    <strong className="font-bold">Anti-Bias Filter Active:</strong> Candidate personal identifiers are masked to promote meritocratic shortlisting.
+                  </p>
+                </div>
+              )}
+
+              {/* Segmented Filter Tabs: Passed vs Failed vs Flagged vs All */}
               {(() => {
                 const benchmark = selectedJobForReview.passing_score ?? 70;
+                const isCandidateFlagged = (c) =>
+                  Boolean(
+                    c.is_suspicious ||
+                      (c.tab_switch_count && c.tab_switch_count > 2) ||
+                      c.submission_reason === 'AUTO_PROCTOR_VIOLATION'
+                  );
                 const passedList = candidates.filter((c) =>
                   getIsCandidatePassed(c, benchmark)
                 );
                 const failedList = candidates.filter(
                   (c) => !getIsCandidatePassed(c, benchmark)
                 );
+                const flaggedList = candidates.filter((c) => isCandidateFlagged(c));
                 const displayedList =
                   candidateFilter === 'PASSED'
                     ? passedList
                     : candidateFilter === 'FAILED'
                     ? failedList
+                    : candidateFilter === 'FLAGGED'
+                    ? flaggedList
                     : candidates;
 
                 return (
@@ -753,6 +886,16 @@ export default function RecruiterPanel() {
                         }`}
                       >
                         Failed ({failedList.length})
+                      </button>
+                      <button
+                        onClick={() => setCandidateFilter('FLAGGED')}
+                        className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
+                          candidateFilter === 'FLAGGED'
+                            ? 'bg-amber-600 text-white shadow-xs'
+                            : 'text-amber-700 dark:text-amber-400 hover:text-amber-800'
+                        }`}
+                      >
+                        Flagged ({flaggedList.length})
                       </button>
                       <button
                         onClick={() => setCandidateFilter('ALL')}
@@ -793,29 +936,48 @@ export default function RecruiterPanel() {
                                 }`}
                               >
                                 <div className="flex items-start justify-between gap-2">
-                                  <div className="flex items-start gap-2.5">
-                                    <span
-                                      className={`w-6 h-6 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5 ${
-                                        rankIdx === 0
-                                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
-                                          : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                                      }`}
-                                    >
-                                      #{rankIdx + 1}
-                                    </span>
-                                    <div>
-                                      <span className="text-xs font-bold text-slate-900 dark:text-white block leading-snug">
-                                        {cand.user?.full_name ||
-                                          `Applicant #${cand.user_id}`}
-                                      </span>
-                                      <span className="text-[10px] text-slate-400 block">
-                                        Applied{' '}
-                                        {new Date(
-                                          cand.applied_at
-                                        ).toLocaleDateString()}
-                                      </span>
-                                    </div>
-                                  </div>
+                                  {(() => {
+                                    const masked = maskCandidateDetails(cand, blindHiringActive);
+                                    return (
+                                      <div className="flex items-start gap-2.5">
+                                        <div className="relative shrink-0 mt-0.5">
+                                          <span
+                                            className={`w-7 h-7 rounded-full text-[10px] font-black flex items-center justify-center ${
+                                              blindHiringActive
+                                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                                                : rankIdx === 0
+                                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+                                                : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                            }`}
+                                          >
+                                            {blindHiringActive ? (
+                                              <User className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                                            ) : (
+                                              `#${rankIdx + 1}`
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-xs font-bold text-slate-900 dark:text-white block leading-snug">
+                                              {masked.displayName}
+                                            </span>
+                                            {blindHiringActive && (
+                                              <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                                Anti-Bias Protected
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className="text-[10px] text-slate-400 block">
+                                            {blindHiringActive
+                                              ? 'Demographics Masked • '
+                                              : `${cand.user?.email || 'Candidate'} • `}
+                                            Applied {new Date(cand.applied_at).toLocaleDateString()}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
 
                                   <div className="shrink-0">
                                     {getStatusBadge(cand.status)}
@@ -851,7 +1013,60 @@ export default function RecruiterPanel() {
                                       Stage-2 Received
                                     </span>
                                   )}
+
+                                  {cand.expected_salary != null && (() => {
+                                    const maxBudget = selectedJobForReview?.max_salary ? Number(selectedJobForReview.max_salary) : null;
+                                    const isWithin = maxBudget !== null ? cand.expected_salary <= maxBudget : null;
+                                    const diff = maxBudget !== null && cand.expected_salary > maxBudget ? cand.expected_salary - maxBudget : 0;
+                                    return (
+                                      <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border flex items-center gap-1 ${
+                                        isWithin === true
+                                          ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300'
+                                          : isWithin === false
+                                          ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300'
+                                          : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-300'
+                                      }`}>
+                                        <DollarSign className="w-2.5 h-2.5" />
+                                        Exp: ৳{Number(cand.expected_salary).toLocaleString()}
+                                        {isWithin === true && <span className="text-[9px] font-black">[ Within Budget ]</span>}
+                                        {isWithin === false && <span className="text-[9px] font-black">[ Above: +৳{diff.toLocaleString()} ]</span>}
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
+
+                                {/* Suspicion / Proctoring Alert Card */}
+                                {isCandidateFlagged(cand) && (
+                                  <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold flex items-center gap-1.5 text-rose-700 dark:text-rose-400">
+                                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                        ⚠️ Suspicion Flag: High Proctoring Risk
+                                      </span>
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-200 uppercase">
+                                        {cand.submission_reason || 'SUSPICIOUS'}
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] text-rose-600 dark:text-rose-400 flex flex-wrap items-center gap-2 font-medium">
+                                      <span>
+                                        Tab Switches:{' '}
+                                        <strong className="font-bold text-rose-900 dark:text-rose-200">
+                                          {cand.tab_switch_count ?? 0}
+                                        </strong>
+                                      </span>
+                                      {cand.proctoring_violations &&
+                                        Array.isArray(cand.proctoring_violations) &&
+                                        cand.proctoring_violations.length > 0 && (
+                                          <>
+                                            <span>•</span>
+                                            <span>
+                                              Logged Violations: {cand.proctoring_violations.length}
+                                            </span>
+                                          </>
+                                        )}
+                                    </div>
+                                  </div>
+                                )}
 
                                 {/* Shortlist / Advance Action Button for Passed Candidates */}
                                 {isPassed &&
@@ -871,6 +1086,29 @@ export default function RecruiterPanel() {
                                         : 'Shortlist Candidate'}
                                     </Button>
                                   )}
+
+                                {cand.status === 'SHORTLISTED' && (
+                                  <Button
+                                    size="sm"
+                                    variant="primary"
+                                    onClick={() =>
+                                      setSchedulingCandidateForPanel({
+                                        ...cand,
+                                        candidate_id: cand.user_id,
+                                        candidate_name: cand.candidate_name,
+                                        candidate_email: cand.candidate_email,
+                                        job_id: selectedJobForReview.id,
+                                        job_title: selectedJobForReview.title,
+                                        company_name: selectedJobForReview.company_name,
+                                        application_id: cand.id,
+                                      })
+                                    }
+                                    className="w-full text-xs font-bold py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center gap-1.5 shadow-sm shadow-blue-600/20"
+                                  >
+                                    <Video className="w-3.5 h-3.5" />
+                                    Schedule Google Meet Interview
+                                  </Button>
+                                )}
 
                                 {/* Primary Action: Inspect Full Application & Assessment */}
                                 <Button
@@ -932,10 +1170,129 @@ export default function RecruiterPanel() {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* BDjobs Industry Categorization & Workplace Model */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                Job Category / Industry *
+              </label>
+              <select
+                value={jobForm.category}
+                onChange={(e) => setJobForm({ ...jobForm, category: e.target.value })}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium"
+              >
+                <option value="Software Engineering">Software Engineering</option>
+                <option value="AI / Machine Learning">AI / Machine Learning</option>
+                <option value="Data Science & Analytics">Data Science & Analytics</option>
+                <option value="UI/UX & Product Design">UI/UX & Product Design</option>
+                <option value="Quality Assurance & Testing">Quality Assurance & Testing</option>
+                <option value="DevOps & Cloud Engineering">DevOps & Cloud Engineering</option>
+                <option value="Mobile App Development">Mobile App Development</option>
+                <option value="Cybersecurity & Networking">Cybersecurity & Networking</option>
+                <option value="Product & Project Management">Product & Project Management</option>
+                <option value="Database Administration">Database Administration</option>
+                <option value="IT & Tech Support">IT & Tech Support</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                Workplace Model *
+              </label>
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
+                {[
+                  { id: 'ON_SITE', label: 'On-site' },
+                  { id: 'REMOTE', label: 'Remote' },
+                  { id: 'HYBRID', label: 'Hybrid' },
+                ].map((wp) => (
+                  <button
+                    type="button"
+                    key={wp.id}
+                    onClick={() => setJobForm({ ...jobForm, workplace_type: wp.id })}
+                    className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      jobForm.workplace_type === wp.id
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300/60 dark:hover:bg-slate-700/60'
+                    }`}
+                  >
+                    {wp.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Salary Specification (BDT) & Minimum Experience */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Salary Specification (৳ BDT)
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={jobForm.is_salary_negotiable}
+                  onChange={(e) =>
+                    setJobForm({ ...jobForm, is_salary_negotiable: e.target.checked })
+                  }
+                  className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="font-semibold text-slate-700 dark:text-slate-300">Negotiable Salary</span>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                  Min Monthly Salary (৳)
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 30000"
+                  value={jobForm.min_salary}
+                  onChange={(e) => setJobForm({ ...jobForm, min_salary: e.target.value })}
+                  disabled={jobForm.is_salary_negotiable && !jobForm.min_salary}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white disabled:opacity-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                  Max Monthly Salary (৳)
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 50000"
+                  value={jobForm.max_salary}
+                  onChange={(e) => setJobForm({ ...jobForm, max_salary: e.target.value })}
+                  disabled={jobForm.is_salary_negotiable && !jobForm.min_salary}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white disabled:opacity-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                  Min Experience (Years)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="25"
+                  placeholder="0 for freshers"
+                  value={jobForm.experience_years_required}
+                  onChange={(e) =>
+                    setJobForm({ ...jobForm, experience_years_required: e.target.value })
+                  }
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Job Type
+                Job Schedule
               </label>
               <select
                 value={jobForm.job_type}
@@ -945,7 +1302,6 @@ export default function RecruiterPanel() {
                 <option value="FULL_TIME">Full Time</option>
                 <option value="PART_TIME">Part Time</option>
                 <option value="CONTRACT">Contract</option>
-                <option value="REMOTE">Remote</option>
                 <option value="INTERNSHIP">Internship</option>
               </select>
             </div>
@@ -967,15 +1323,6 @@ export default function RecruiterPanel() {
                 <option value="LEAD">Lead / Architect</option>
               </select>
             </div>
-
-            <Input
-              label="Salary Range"
-              placeholder="e.g. $80k - $120k / yr"
-              value={jobForm.salary_range}
-              onChange={(e) =>
-                setJobForm({ ...jobForm, salary_range: e.target.value })
-              }
-            />
           </div>
 
           <Input
@@ -1259,6 +1606,21 @@ export default function RecruiterPanel() {
           onClose={() => setInspectingAppId(null)}
           applicationId={inspectingAppId}
           onDecisionMade={handleDecisionMade}
+          blindMode={blindHiringActive}
+        />
+      )}
+
+      {/* One-Click Smart Meeting Scheduler Modal */}
+      {schedulingCandidateForPanel && (
+        <ScheduleInterviewModal
+          isOpen={Boolean(schedulingCandidateForPanel)}
+          onClose={() => setSchedulingCandidateForPanel(null)}
+          candidate={schedulingCandidateForPanel}
+          onScheduled={(updated) => {
+            handleDecisionMade(updated);
+            setSchedulingCandidateForPanel(null);
+          }}
+          triggerToast={triggerToast}
         />
       )}
 

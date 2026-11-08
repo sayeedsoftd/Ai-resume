@@ -107,3 +107,31 @@ class ResumeBuilderSaveRequest(BaseModel):
     template_id: Optional[str] = "modern-ats"
     is_primary: Optional[bool] = True
 
+
+class BulletPointRewrite(BaseModel):
+    original: str
+    optimized: str
+
+
+class ResumeGapAnalysisRequest(BaseModel):
+    resume_id: Optional[int] = Field(None, description="Optional ID of existing resume in DB. If omitted, primary resume is used.")
+    resume_text: Optional[str] = Field(None, description="Optional raw or pasted resume text if no resume_id.")
+    job_id: Optional[int] = Field(None, description="Optional ID of existing Job.")
+    job_description_text: Optional[str] = Field(None, description="Custom job description or pasted text to compare against.")
+    required_skills: Optional[List[str]] = Field(None, description="Explicit list of skills expected.")
+
+
+class ResumeGapAnalysisResponse(BaseModel):
+    match_score: int
+    missing_hard_skills: List[str]
+    missing_soft_skills: List[str]
+    experience_gap: str
+    project_recommendations: List[str]
+    bullet_point_rewrites: List[BulletPointRewrite]
+    projected_score_boost: str
+    matched_skills: Optional[List[str]] = []
+    target_job_title: Optional[str] = "Target Role"
+    target_company: Optional[str] = "Hiring Team"
+    resume_name: Optional[str] = "Active Resume"
+
+

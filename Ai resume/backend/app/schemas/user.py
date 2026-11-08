@@ -30,6 +30,13 @@ class UserResponse(BaseModel):
     is_verified_badge: bool
     subscription_status: Optional[str] = "NONE"
     subscription_expires_at: Optional[datetime] = None
+    company_name: Optional[str] = None
+    company_logo_url: Optional[str] = None
+    company_website: Optional[str] = None
+    company_location: Optional[str] = None
+    company_description: Optional[str] = None
+    company_size: Optional[str] = None
+    trade_license_verified: Optional[bool] = False
     created_at: datetime
     updated_at: datetime
 
@@ -104,5 +111,32 @@ class UserProfileResponse(BaseModel):
     skills: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CompanyProfileUpdate(BaseModel):
+    company_name: Optional[str] = None
+    company_logo_url: Optional[str] = None
+    company_website: Optional[str] = None
+    company_location: Optional[str] = None
+    company_description: Optional[str] = None
+    company_size: Optional[str] = None
+
+
+class CompanyPublicProfileResponse(BaseModel):
+    recruiter_id: int
+    company_name: str
+    company_logo_url: Optional[str] = None
+    company_website: Optional[str] = None
+    company_location: Optional[str] = None
+    company_description: Optional[str] = None
+    company_size: Optional[str] = None
+    trade_license_verified: bool = False
+    is_verified_badge: bool = False
+    recruiter_name: str
+    recruiter_email: Optional[str] = None
+    member_since: Optional[datetime] = None
+    active_jobs: List[Dict[str, Any]] = []
 
     model_config = ConfigDict(from_attributes=True)

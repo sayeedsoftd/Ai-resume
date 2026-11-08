@@ -16,12 +16,20 @@ import {
   Video,
   ExternalLink,
   MessageSquare,
+  Milestone,
+  MapPin,
+  DollarSign,
+  ChevronRight,
+  Briefcase,
+  FileText,
 } from 'lucide-react';
 import { jobService } from '../../services/jobService';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import SubmissionReviewModal from '../../components/assessment/SubmissionReviewModal';
 import Stage2AssessmentModal from '../../components/assessment/Stage2AssessmentModal';
+import ApplicationJourneyStepper from '../../components/candidate/ApplicationJourneyStepper';
+import OfferViewModal from '../../components/candidate/OfferViewModal';
 import ErrorBoundary from '../../components/ui/ErrorBoundary';
 
 const STATUS_COLUMNS = [
@@ -29,15 +37,17 @@ const STATUS_COLUMNS = [
   { id: 'SCREENING', label: 'Screening', color: 'border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300' },
   { id: 'SHORTLISTED', label: 'Shortlisted / Stage 2', color: 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300' },
   { id: 'INTERVIEW', label: 'Interview Scheduled', color: 'border-purple-500 bg-purple-50/40 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300' },
-  { id: 'REJECTED', label: 'Not Selected', color: 'border-rose-500 bg-rose-50/40 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300' },
+  { id: 'OFFER', label: 'Offer Received / Accepted', color: 'border-teal-500 bg-teal-50/40 dark:bg-teal-950/20 text-teal-700 dark:text-teal-300' },
+  { id: 'REJECTED', label: 'Not Selected / Declined', color: 'border-rose-500 bg-rose-50/40 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300' },
 ];
 
 export default function ApplicationTracker() {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewStyle, setViewStyle] = useState('kanban'); // 'kanban' | 'table'
+  const [viewStyle, setViewStyle] = useState('stepper'); // 'stepper' | 'kanban' | 'table'
   const [selectedSubmissionId, setSelectedSubmissionId] = useState(null);
   const [stage2ModalData, setStage2ModalData] = useState(null);
+  const [viewingOfferAppId, setViewingOfferAppId] = useState(null);
 
   useEffect(() => {
     fetchApplications();
@@ -62,8 +72,20 @@ export default function ApplicationTracker() {
 
   const getStatusBadge = (status) => {
     switch (status) {
+      case 'OFFER_EXTENDED':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-emerald-500 to-teal-500 text-white border border-emerald-400 shadow-xs animate-pulse">
+            🎉 Offer Extended
+          </span>
+        );
       case 'ACCEPTED':
         return <Badge variant="success">Offer Accepted</Badge>;
+      case 'DECLINED':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+            Offer Declined
+          </span>
+        );
       case 'STAGE1_PASSED':
         return (
           <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
@@ -109,10 +131,11 @@ export default function ApplicationTracker() {
   };
 
   const mapAppToColumn = (status) => {
+    if (status === 'OFFER_EXTENDED' || status === 'ACCEPTED') return 'OFFER';
     if (status === 'STAGE1_PASSED' || status === 'SCREENING') return 'SCREENING';
-    if (status === 'STAGE1_FAILED' || status === 'REJECTED' || status === 'JOB_CLOSED' || status === 'CLOSED') return 'REJECTED';
+    if (status === 'STAGE1_FAILED' || status === 'REJECTED' || status === 'DECLINED' || status === 'JOB_CLOSED' || status === 'CLOSED') return 'REJECTED';
     if (status === 'STAGE2_INVITED' || status === 'STAGE2_SUBMITTED' || status === 'SHORTLISTED') return 'SHORTLISTED';
-    if (status === 'INTERVIEW' || status === 'ACCEPTED') return 'INTERVIEW';
+    if (status === 'INTERVIEW') return 'INTERVIEW';
     return 'APPLIED';
   };
 
@@ -126,20 +149,31 @@ export default function ApplicationTracker() {
           <div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <FileCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              1-Click Application & Pre-Screening Tracker
+              Application Journey Stepper & Screening Tracker
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Track ATS compatibility rankings, verified screening test scores, and recruiter interview invitations.
+              Follow your verified 5-stage recruitment journey in real time with recruiter view notifications.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+            <button
+              onClick={() => setViewStyle('stepper')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                viewStyle === 'stepper'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Milestone className="w-3.5 h-3.5" />
+              Journey Stepper
+            </button>
             <button
               onClick={() => setViewStyle('kanban')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 viewStyle === 'kanban'
                   ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Kanban className="w-3.5 h-3.5" />
@@ -150,7 +184,7 @@ export default function ApplicationTracker() {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 viewStyle === 'table'
                   ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <TableIcon className="w-3.5 h-3.5" />
@@ -158,6 +192,41 @@ export default function ApplicationTracker() {
             </button>
           </div>
         </div>
+
+        {/* Celebratory Offer Letter Banner(s) */}
+        {!loading && safeApplications.filter(app => app.status === 'OFFER_EXTENDED').map(offerApp => (
+          <div
+            key={`banner-offer-${offerApp.id}`}
+            className="p-5 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-700 text-white shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-emerald-400/40 animate-in fade-in"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner">
+                <Sparkles className="w-6 h-6 text-yellow-300 animate-pulse" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-white/20 rounded-md">
+                    Official Job Offer Received 🎉
+                  </span>
+                  <span className="text-xs text-white/80 font-medium">Application #{offerApp.id}</span>
+                </div>
+                <h3 className="text-base font-extrabold text-white">
+                  Congratulations! You received an official offer from {offerApp.job?.company_name || 'the hiring team'} for {offerApp.job?.title || 'the position'}!
+                </h3>
+                <p className="text-xs text-emerald-100">
+                  Review compensation details, joining timeline, perks, and digitally accept or decline your employment offer.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setViewingOfferAppId(offerApp.id)}
+              className="px-4 py-2.5 bg-white text-emerald-800 hover:bg-emerald-50 text-xs font-black rounded-xl shadow-md transition-all shrink-0 flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <FileText className="w-4 h-4 text-emerald-600" />
+              Review & Respond to Offer
+            </button>
+          </div>
+        ))}
 
         {loading ? (
           <div className="text-center py-16 text-xs text-slate-500">
@@ -179,8 +248,137 @@ export default function ApplicationTracker() {
               </Button>
             </Link>
           </div>
+        ) : viewStyle === 'stepper' ? (
+          /* ================= JOURNEY STEPPER VIEW ================= */
+          <div className="space-y-5">
+            {safeApplications.map((app) => (
+              <div
+                key={app.id}
+                className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-sm hover:shadow-md transition-all space-y-4"
+              >
+                {/* Application Header Card */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Link to={`/jobs/${app.job_id}`}>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                          {app.job?.title || `Position #${app.job_id}`}
+                        </h3>
+                      </Link>
+                      <span className="text-xs text-slate-400 font-semibold">
+                        (App #{app.id})
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+                      <span className="flex items-center gap-1 font-medium">
+                        <Building className="w-3.5 h-3.5 text-slate-400" />
+                        {app.job?.company_name || 'Hiring Organization'}
+                      </span>
+                      {app.job?.location && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                          {app.job.location}
+                        </span>
+                      )}
+                      {app.job?.job_type && (
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                          {app.job.job_type.replace('_', ' ')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {app.match_score && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                        ATS: {Math.round(app.match_score)}%
+                      </span>
+                    )}
+                    {getStatusBadge(app.status)}
+                  </div>
+                </div>
+
+                {/* Live Journey Stepper Component */}
+                <ApplicationJourneyStepper
+                  application={app}
+                  onViewOffer={() => setViewingOfferAppId(app.id)}
+                  onTakeStage2={() =>
+                    setStage2ModalData({
+                      jobId: app.job_id,
+                      applicationId: app.id,
+                      jobTitle: app.job?.title || 'Job Assessment',
+                      companyName: app.job?.company_name || 'Hiring Team',
+                    })
+                  }
+                />
+
+                {/* Quick Action Footer */}
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800/80 text-xs flex-wrap gap-2">
+                  <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400 text-[11px]">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                      Applied on {new Date(app.applied_at).toLocaleDateString()}
+                    </span>
+                    {app.job?.salary_range && (
+                      <span className="flex items-center gap-1 font-medium text-slate-600 dark:text-slate-300">
+                        <span>Salary:</span> {app.job.salary_range}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {(app.status === 'OFFER_EXTENDED' || app.status === 'ACCEPTED') && (
+                      <Button
+                        size="sm"
+                        onClick={() => setViewingOfferAppId(app.id)}
+                        className={`text-xs font-bold text-white shadow-xs ${
+                          app.status === 'OFFER_EXTENDED'
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 animate-pulse'
+                            : 'bg-emerald-600 hover:bg-emerald-700'
+                        }`}
+                      >
+                        <FileText className="w-3.5 h-3.5 mr-1" />
+                        {app.status === 'ACCEPTED' ? 'View Signed Offer' : 'Review & Sign Offer'}
+                      </Button>
+                    )}
+
+                    {app.candidate_test_submission_id ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedSubmissionId(app.candidate_test_submission_id)}
+                        className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                      >
+                        <Award className="w-3.5 h-3.5 mr-1" />
+                        View Assessment Submission
+                      </Button>
+                    ) : (
+                      <Link to={`/jobs/${app.job_id}`}>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          className="text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 mr-1" />
+                          Take Screening Test
+                        </Button>
+                      </Link>
+                    )}
+
+                    <Link to={`/jobs/${app.job_id}`}>
+                      <Button size="sm" variant="ghost" className="text-xs text-slate-500 dark:text-slate-400">
+                        View Circular <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : viewStyle === 'kanban' ? (
-          /* KANBAN BOARD VIEW */
+          /* ================= KANBAN BOARD VIEW ================= */
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto pb-4">
             {STATUS_COLUMNS.map((col) => {
               const colApps = safeApplications.filter(
@@ -212,7 +410,7 @@ export default function ApplicationTracker() {
                       colApps.map((app) => (
                         <div
                           key={app.id}
-                          className="bg-white dark:bg-slate-800/90 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700/80 shadow-xs hover:shadow-md transition-all space-y-2"
+                          className="bg-white dark:bg-slate-800/90 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700/80 shadow-xs hover:shadow-md transition-all space-y-2.5"
                         >
                           <div className="flex items-center justify-between gap-1 flex-wrap">
                             <span className="text-[10px] font-bold text-slate-400">
@@ -247,98 +445,38 @@ export default function ApplicationTracker() {
                             {app.job?.company_name || 'Hiring Organization'}
                           </div>
 
+                          {/* Live Journey Progress Stepper (Compact Mode) */}
                           <div className="pt-1">
-                            {getStatusBadge(app.status)}
+                            <ApplicationJourneyStepper
+                              application={app}
+                              compact={true}
+                              onViewOffer={() => setViewingOfferAppId(app.id)}
+                              onTakeStage2={() =>
+                                setStage2ModalData({
+                                  jobId: app.job_id,
+                                  applicationId: app.id,
+                                  jobTitle: app.job?.title || 'Job Assessment',
+                                  companyName: app.job?.company_name || 'Hiring Team',
+                                })
+                              }
+                            />
                           </div>
-
-                          {/* Stage-2 Custom Assessment Callout */}
-                          {app.status === 'STAGE2_INVITED' && (
-                            <div className="p-2.5 rounded-xl bg-purple-100/90 dark:bg-purple-950/60 border border-purple-300 dark:border-purple-800 text-xs space-y-1.5">
-                              <div className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1">
-                                <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
-                                <span>Stage-2 Assessment Ready!</span>
-                              </div>
-                              <p className="text-[11px] text-purple-800 dark:text-purple-300 leading-snug">
-                                You cleared Stage-1! The recruiter has invited you to complete their custom technical test.
-                              </p>
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                onClick={() =>
-                                  setStage2ModalData({
-                                    jobId: app.job_id,
-                                    applicationId: app.id,
-                                    jobTitle: app.job?.title || 'Job Assessment',
-                                    companyName: app.job?.company_name || 'Hiring Team',
-                                  })
-                                }
-                                className="w-full text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white mt-1 py-1"
-                              >
-                                Take Stage-2 Custom Assessment
-                              </Button>
-                            </div>
-                          )}
-
-                          {app.status === 'STAGE2_SUBMITTED' && (
-                            <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-[11px] text-indigo-800 dark:text-indigo-300 space-y-0.5">
-                              <span className="font-bold block flex items-center gap-1">
-                                <CheckCircle className="w-3.5 h-3.5 text-indigo-600" /> Stage-2 Assessment Submitted
-                              </span>
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
-                                Under Review / Waiting for Final Decision
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Recruiter Decision & Interview Callout */}
-                          {(app.interview_date || app.meeting_link || app.recruiter_notes) && (
-                            <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-[10px] space-y-1.5">
-                              {app.interview_date && (
-                                <div className="font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                                  <Calendar className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
-                                  <span>Interview: {app.interview_date}</span>
-                                </div>
-                              )}
-                              {app.meeting_link && (
-                                <a
-                                  href={app.meeting_link.startsWith('http') ? app.meeting_link : `https://${app.meeting_link}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-semibold break-all"
-                                >
-                                  <Video className="w-3 h-3 text-indigo-500 shrink-0" />
-                                  <span className="truncate">Join Meeting: {app.meeting_link}</span>
-                                  <ExternalLink className="w-2.5 h-2.5 shrink-0" />
-                                </a>
-                              )}
-                              {app.recruiter_notes && (
-                                <div className="text-[10px] text-slate-600 dark:text-slate-300 italic pt-1 border-t border-purple-200/50 dark:border-purple-800/50 flex items-start gap-1">
-                                  <MessageSquare className="w-3 h-3 text-purple-500 shrink-0 mt-0.5" />
-                                  <span>"{app.recruiter_notes}"</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Rejection Note */}
-                          {app.status === 'REJECTED' && app.rejection_reason && (
-                            <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 text-[10px] text-rose-700 dark:text-rose-300 space-y-0.5">
-                              <span className="font-bold block">Feedback:</span>
-                              <span className="italic block">"{app.rejection_reason}"</span>
-                            </div>
-                          )}
 
                           {/* Action Button for Assessment Review */}
                           <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex flex-col gap-1.5">
-                            <div className="flex items-center justify-between text-[10px] text-slate-400">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="w-3 h-3" />
-                                {new Date(app.applied_at).toLocaleDateString()}
-                              </span>
-                              <span className="font-semibold text-slate-600 dark:text-slate-300">
-                                {app.assessment_status || 'PENDING'}
-                              </span>
-                            </div>
+                            {(app.status === 'OFFER_EXTENDED' || app.status === 'ACCEPTED') && (
+                              <button
+                                onClick={() => setViewingOfferAppId(app.id)}
+                                className={`w-full py-1.5 px-2 text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 shadow-xs ${
+                                  app.status === 'OFFER_EXTENDED'
+                                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700'
+                                    : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                }`}
+                              >
+                                <FileText className="w-3 h-3" />
+                                {app.status === 'ACCEPTED' ? 'View Signed Offer' : '🎉 Review & Sign Offer'}
+                              </button>
+                            )}
 
                             {app.candidate_test_submission_id ? (
                               <button
@@ -365,7 +503,7 @@ export default function ApplicationTracker() {
             })}
           </div>
         ) : (
-          /* TABLE VIEW */
+          /* ================= TABLE VIEW ================= */
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -374,7 +512,8 @@ export default function ApplicationTracker() {
                     <th className="px-5 py-3.5">ID</th>
                     <th className="px-5 py-3.5">Job Title & Company</th>
                     <th className="px-5 py-3.5">ATS Match</th>
-                    <th className="px-5 py-3.5">Screening Test</th>
+                    <th className="px-5 py-3.5">Screening Exam</th>
+                    <th className="px-5 py-3.5">Recruiter Review</th>
                     <th className="px-5 py-3.5">Status</th>
                     <th className="px-5 py-3.5">Applied Date</th>
                     <th className="px-5 py-3.5 text-right">Action</th>
@@ -431,12 +570,30 @@ export default function ApplicationTracker() {
                       </td>
                       <td className="px-5 py-3.5">
                         {app.test_score !== null && app.test_score !== undefined ? (
-                          <span className="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[11px]">
-                            <Award className="w-3 h-3 text-indigo-500" /> {Math.round(app.test_score)}%
-                          </span>
+                          <div className="space-y-0.5">
+                            <span className="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[11px]">
+                              <Award className="w-3 h-3 text-indigo-500" /> {Math.round(app.test_score)}%
+                            </span>
+                            {app.mcq_score != null && app.written_score != null && (
+                              <p className="text-[10px] text-slate-400">
+                                MCQ: {Math.round(app.mcq_score)}/50 | Written: {Math.round(app.written_score)}/50
+                              </p>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-[11px] text-amber-600 dark:text-amber-400">
                             Pending Test
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {app.viewed_by_recruiter ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                            <Eye className="w-3 h-3 text-emerald-600" /> Viewed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                            <Clock className="w-3 h-3 text-slate-400" /> In Queue
                           </span>
                         )}
                       </td>
@@ -445,6 +602,21 @@ export default function ApplicationTracker() {
                         {new Date(app.applied_at).toLocaleDateString()}
                       </td>
                       <td className="px-5 py-3.5 text-right space-x-1.5">
+                        {(app.status === 'OFFER_EXTENDED' || app.status === 'ACCEPTED') && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => setViewingOfferAppId(app.id)}
+                            className={`text-[11px] py-1 px-2.5 font-bold text-white ${
+                              app.status === 'OFFER_EXTENDED'
+                                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
+                                : 'bg-emerald-600 hover:bg-emerald-700'
+                            }`}
+                          >
+                            <FileText className="w-3 h-3 mr-1" />
+                            {app.status === 'ACCEPTED' ? 'Signed Offer' : 'Review Offer'}
+                          </Button>
+                        )}
                         {app.status === 'STAGE2_INVITED' ? (
                           <Button
                             variant="primary"
@@ -508,6 +680,16 @@ export default function ApplicationTracker() {
               fetchApplications();
               setStage2ModalData(null);
             }}
+          />
+        )}
+
+        {/* Modal for Candidate Offer Letter Viewing & Signing */}
+        {viewingOfferAppId && (
+          <OfferViewModal
+            isOpen={!!viewingOfferAppId}
+            onClose={() => setViewingOfferAppId(null)}
+            applicationId={viewingOfferAppId}
+            onResponseRecorded={fetchApplications}
           />
         )}
       </div>

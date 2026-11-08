@@ -24,6 +24,7 @@ from app.schemas.application import JobApplicationResponse
 from app.services.matcher import JobMatchService
 from app.services.job_matcher import JobMatcherService
 from app.services.gemini_service import GeminiService
+from app.services.salary_benchmarker import SalaryBenchmarkService
 
 router = APIRouter()
 
@@ -46,10 +47,34 @@ def _sanitize_and_cap_manual_questions(raw_questions: Any) -> Optional[Any]:
     return raw_questions
 
 
+@router.get("/categories", response_model=List[str])
+def list_job_categories():
+    """Returns standardized BDjobs-style Industry Categories."""
+    return [
+        "Software Engineering",
+        "AI / Machine Learning",
+        "Data Science & Analytics",
+        "UI/UX & Product Design",
+        "Quality Assurance & Testing",
+        "DevOps & Cloud Engineering",
+        "Mobile App Development",
+        "Cybersecurity & Networking",
+        "Product & Project Management",
+        "Database Administration",
+        "IT & Tech Support",
+    ]
+
+
 @router.get("/", response_model=List[JobResponse])
 @router.get("/public", response_model=List[JobResponse])
 def list_jobs(
-    q: Optional[str] = Query(None, description="Search keyword in title or company"),
+    q: Optional[str] = Query(None, description="Search keyword in title, company, or description"),
+    search_keyword: Optional[str] = Query(None, description="Alternative search keyword parameter"),
+    category: Optional[str] = Query(None, description="Industry category e.g. Software Engineering, AI"),
+    workplace_type: Optional[str] = Query(None, description="ON_SITE, REMOTE, HYBRID, or ALL"),
+    min_salary: Optional[float] = Query(None, description="Minimum salary boundary"),
+    max_salary: Optional[float] = Query(None, description="Maximum salary boundary"),
+    experience_years: Optional[int] = Query(None, description="Candidate max years of experience required"),
     location: Optional[str] = None,
     job_type: Optional[JobType] = None,
     experience_level: Optional[ExperienceLevel] = None,
@@ -57,16 +82,46 @@ def list_jobs(
     limit: int = 50,
     db: Session = Depends(get_db),
 ):
-    """List all active job postings with filtering and search capabilities (excluding frozen expired listings)."""
+    """List all active job postings with BDjobs-style category, workplace, and salary filtering."""
     query = db.query(Job).filter(
         Job.is_active == True,
         (Job.is_frozen == False) | (Job.is_frozen == None),
         (Job.is_deleted == False) | (Job.is_deleted == None),
     )
 
-    if q:
-        search_filter = f"%{q}%"
-        query = query.filter((Job.title.ilike(search_filter)) | (Job.company_name.ilike(search_filter)))
+    keyword = (search_keyword or q or "").strip()
+    if keyword:
+        search_filter = f"%{keyword}%"
+        query = query.filter(
+            (Job.title.ilike(search_filter))
+            | (Job.company_name.ilike(search_filter))
+            | (Job.description.ilike(search_filter))
+            | (Job.category.ilike(search_filter))
+        )
+
+    if category and category.strip().upper() not in ["ALL", "ANY", "ALL CATEGORIES"]:
+        query = query.filter(Job.category.ilike(f"%{category.strip()}%"))
+
+    if workplace_type and workplace_type.strip().upper() not in ["ALL", "ANY", "ALL TYPES"]:
+        wt = workplace_type.strip().upper()
+        query = query.filter(Job.workplace_type == wt)
+
+    if min_salary is not None:
+        query = query.filter(
+            (Job.max_salary >= min_salary)
+            | (Job.min_salary >= min_salary)
+            | (Job.is_salary_negotiable == True)
+        )
+
+    if max_salary is not None:
+        query = query.filter(
+            (Job.min_salary <= max_salary)
+            | (Job.is_salary_negotiable == True)
+        )
+
+    if experience_years is not None:
+        query = query.filter(Job.experience_years_required <= experience_years)
+
     if location:
         query = query.filter(Job.location.ilike(f"%{location}%"))
     if job_type:
@@ -95,6 +150,17 @@ def create_job(
             detail="Your recruiter subscription has expired or is inactive. Please renew your plan to post new requisitions.",
         )
 
+    # Calculate BDjobs-style salary_range if min/max salary or negotiable specified
+    calc_salary_range = job_in.salary_range
+    if job_in.is_salary_negotiable and not job_in.min_salary:
+        calc_salary_range = "Negotiable"
+    elif job_in.min_salary is not None and job_in.max_salary is not None:
+        calc_salary_range = f"৳{int(job_in.min_salary):,} - ৳{int(job_in.max_salary):,}"
+    elif job_in.min_salary is not None:
+        calc_salary_range = f"৳{int(job_in.min_salary):,}+"
+    elif not calc_salary_range:
+        calc_salary_range = "Negotiable"
+
     job = Job(
         posted_by_user_id=current_user.id,
         title=job_in.title,
@@ -104,7 +170,13 @@ def create_job(
         experience_level=job_in.experience_level,
         location=job_in.location,
         job_type=job_in.job_type,
-        salary_range=job_in.salary_range,
+        salary_range=calc_salary_range,
+        category=job_in.category or "Software Engineering",
+        workplace_type=(job_in.workplace_type or "ON_SITE").upper(),
+        min_salary=job_in.min_salary,
+        max_salary=job_in.max_salary,
+        is_salary_negotiable=bool(job_in.is_salary_negotiable),
+        experience_years_required=int(job_in.experience_years_required or 0),
         is_active=job_in.is_active if job_in.is_active is not None else True,
         passing_score=job_in.passing_score if job_in.passing_score is not None else 70.0,
         has_manual_stage=bool(job_in.has_manual_stage),
@@ -293,6 +365,7 @@ def get_stage2_assessment(
 @router.post("/{job_id}/apply", response_model=JobApplicationResponse, status_code=status.HTTP_201_CREATED)
 def one_click_apply_job(
     job_id: int,
+    payload: Optional[Dict[str, Any]] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -331,12 +404,23 @@ def one_click_apply_job(
             detail="Please upload a resume first before applying to jobs.",
         )
 
+    expected_salary = None
+    if isinstance(payload, dict) and "expected_salary" in payload and payload["expected_salary"]:
+        try:
+            expected_salary = float(payload["expected_salary"])
+        except (ValueError, TypeError):
+            pass
+
     existing = (
         db.query(JobApplication)
         .filter(JobApplication.job_id == job_id, JobApplication.user_id == current_user.id)
         .first()
     )
     if existing:
+        if expected_salary is not None:
+            existing.expected_salary = expected_salary
+            db.commit()
+            db.refresh(existing)
         return existing
 
     resume_skills = (primary_resume.parsed_data or {}).get("skills", [])
@@ -357,12 +441,33 @@ def one_click_apply_job(
         expected_experience_level=exp_lvl,
     )
 
+    salary_analysis = None
+    fit_status = "WITHIN_BUDGET"
+    if expected_salary is not None:
+        try:
+            salary_analysis = SalaryBenchmarkService.analyze_salary_and_budget_fit(
+                job_title=job.title,
+                experience_required=job.experience_years_required or 0,
+                min_salary=job.min_salary,
+                max_salary=job.max_salary,
+                candidate_experience_years=resume_exp,
+                candidate_skills=resume_skills,
+                candidate_test_score=None,
+                expected_salary=expected_salary,
+            )
+            fit_status = salary_analysis.get("fit_status", "WITHIN_BUDGET")
+        except Exception as sal_err:
+            pass
+
     application = JobApplication(
         job_id=job.id,
         user_id=current_user.id,
         resume_id=primary_resume.id,
         status=JobApplicationStatus.APPLIED,
         match_score=match_res.get("ats_score", 70.0),
+        expected_salary=expected_salary,
+        salary_fit_status=fit_status,
+        ai_salary_benchmark_analysis=salary_analysis,
     )
     db.add(application)
     db.commit()
@@ -504,6 +609,12 @@ def get_my_posted_jobs(
             "job_type": j.job_type.value if hasattr(j.job_type, "value") else str(j.job_type),
             "experience_level": j.experience_level.value if hasattr(j.experience_level, "value") else str(j.experience_level),
             "salary_range": j.salary_range,
+            "category": j.category or "Software Engineering",
+            "workplace_type": j.workplace_type or "ON_SITE",
+            "min_salary": j.min_salary,
+            "max_salary": j.max_salary,
+            "is_salary_negotiable": bool(j.is_salary_negotiable),
+            "experience_years_required": j.experience_years_required or 0,
             "required_skills": j.required_skills or [],
             "description": j.description,
             "is_active": j.is_active,
@@ -516,6 +627,18 @@ def get_my_posted_jobs(
             "views_count": j.views_count or 0,
         })
     return results
+
+
+@router.get("/{job_id}/applications", response_model=List[JobApplicationResponse])
+def get_job_applications_alias(
+    job_id: int,
+    blind_mode: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Recruiter endpoint: View candidates who applied for the given job (supports blind_mode=true)."""
+    from app.api.v1.endpoints.applications import get_job_applications
+    return get_job_applications(job_id=job_id, blind_mode=blind_mode, current_user=current_user, db=db)
 
 
 @router.patch("/{job_id}/toggle-status")

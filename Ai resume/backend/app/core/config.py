@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GEMINI_API_KEY: str = ""
 
+    # SMTP Email Configuration
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    EMAILS_FROM_EMAIL: str = "no-reply@airesumesystem.com"
+
 
     # Storage paths
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
@@ -98,6 +105,18 @@ class Settings(BaseSettings):
     @property
     def kyc_docs_upload_dir(self) -> Path:
         path = self.UPLOAD_DIR / "kyc_docs"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @property
+    def viva_upload_dir(self) -> Path:
+        path = self.UPLOAD_DIR / "viva_recordings"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @property
+    def video_pitches_upload_dir(self) -> Path:
+        path = self.UPLOAD_DIR / "video_pitches"
         path.mkdir(parents=True, exist_ok=True)
         return path
 

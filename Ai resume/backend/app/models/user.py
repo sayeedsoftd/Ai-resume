@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from app.database.base import Base
 from app.models.enums import UserRole
@@ -16,6 +16,16 @@ class User(Base):
     is_verified_badge = Column(Boolean, default=False, nullable=False)
     subscription_status = Column(String(50), default="NONE", nullable=False, index=True)
     subscription_expires_at = Column(DateTime, nullable=True)
+
+    # Company Profile Attributes (for Recruiters & Employer Branding)
+    company_name = Column(String(200), nullable=True, index=True)
+    company_logo_url = Column(String(500), nullable=True)
+    company_website = Column(String(255), nullable=True)
+    company_location = Column(String(200), nullable=True)
+    company_description = Column(Text, nullable=True)
+    company_size = Column(String(100), nullable=True)
+    trade_license_verified = Column(Boolean, default=False, nullable=False)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(
         DateTime,

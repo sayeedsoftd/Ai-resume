@@ -4,6 +4,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import AppLayout from './components/layout/AppLayout';
+import DashboardLayout from './components/layout/DashboardLayout';
 import NotificationModal from './components/ui/NotificationModal';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 
@@ -19,7 +20,13 @@ import Profile from './pages/Profile';
 import KYCVerification from './pages/KYCVerification';
 import AdminDashboard from './pages/AdminDashboard';
 import RecruiterPanel from './pages/recruiter/RecruiterPanel';
+import ShortlistedCandidates from './pages/recruiter/ShortlistedCandidates';
+import CandidateInquiries from './pages/recruiter/CandidateInquiries';
+import CandidateMessages from './pages/candidate/CandidateMessages';
 import PricingCheckout from './pages/subscription/PricingCheckout';
+import VerifyTalent from './pages/public/VerifyTalent';
+import CompanyProfile from './pages/public/CompanyProfile';
+import CompanyProfileSettings from './pages/recruiter/CompanyProfileSettings';
 import NotFound from './pages/NotFound';
 
 // Protected Route Guard
@@ -76,7 +83,7 @@ function AppRoutes() {
       <Route
         path="/jobs"
         element={
-          <AppLayout>
+          <AppLayout requireSidebar={true}>
             <Jobs />
           </AppLayout>
         }
@@ -84,10 +91,14 @@ function AppRoutes() {
       <Route
         path="/jobs/:id"
         element={
-          <AppLayout>
+          <AppLayout requireSidebar={true}>
             <JobDetail />
           </AppLayout>
         }
+      />
+      <Route
+        path="/find-jobs"
+        element={<Navigate to="/candidate/jobs" replace />}
       />
       <Route
         path="/pricing"
@@ -101,15 +112,26 @@ function AppRoutes() {
         path="/subscription"
         element={<Navigate to="/pricing" replace />}
       />
+      {/* Public Cryptographic Credential Verification */}
+      <Route path="/verify-talent/:badgeId" element={<VerifyTalent />} />
+      {/* Public Employer Branding & Company Profile */}
+      <Route
+        path="/company/:companyId"
+        element={
+          <AppLayout requireSidebar={false}>
+            <CompanyProfile />
+          </AppLayout>
+        }
+      />
 
       {/* Protected Pages */}
       <Route
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <Dashboard />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
       />
@@ -117,19 +139,53 @@ function AppRoutes() {
         path="/dashboard/jobs"
         element={
           <ProtectedRoute>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <Dashboard defaultTab="matches" />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/candidate/jobs"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Jobs />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/jobs/:id"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <JobDetail />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gap-analyzer"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Dashboard defaultTab="gap-analyzer" />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/analyzer"
+        element={<Navigate to="/gap-analyzer" replace />}
       />
       <Route
         path="/resumes"
         element={
           <ProtectedRoute>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <ResumeUpload />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
       />
@@ -137,11 +193,15 @@ function AppRoutes() {
         path="/resume-builder"
         element={
           <ProtectedRoute>
-            <AppLayout requireSidebar={false}>
+            <DashboardLayout>
               <ResumeBuilder />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/live-resume-builder"
+        element={<Navigate to="/resume-builder" replace />}
       />
       <Route
         path="/builder"
@@ -151,19 +211,51 @@ function AppRoutes() {
         path="/profile"
         element={
           <ProtectedRoute>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <Profile />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/candidate/messages"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <CandidateMessages />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/messages"
+        element={<Navigate to="/candidate/messages" replace />}
+      />
+      <Route
+        path="/candidate/applications"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Dashboard defaultTab="tracker" />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/tracker"
+        element={<Navigate to="/candidate/applications" replace />}
+      />
+      <Route
+        path="/applications"
+        element={<Navigate to="/candidate/applications" replace />}
       />
       <Route
         path="/kyc"
         element={
           <ProtectedRoute>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <KYCVerification />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
       />
@@ -173,20 +265,54 @@ function AppRoutes() {
         path="/recruiter"
         element={
           <ProtectedRoute>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <RecruiterPanel />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/recruiter/shortlisted"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <ShortlistedCandidates />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recruiter/inquiries"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <CandidateInquiries />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recruiter/company-profile"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <CompanyProfileSettings />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recruiter/company"
+        element={<Navigate to="/recruiter/company-profile" replace />}
       />
 
       <Route
         path="/admin"
         element={
           <ProtectedRoute requireAdmin={true}>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <AdminDashboard defaultTab="overview" />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
       />
@@ -194,9 +320,9 @@ function AppRoutes() {
         path="/admin/overview"
         element={
           <ProtectedRoute requireAdmin={true}>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <AdminDashboard defaultTab="overview" />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
       />
@@ -204,9 +330,9 @@ function AppRoutes() {
         path="/admin/kyc"
         element={
           <ProtectedRoute requireAdmin={true}>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <AdminDashboard defaultTab="kyc" />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
       />
@@ -214,9 +340,9 @@ function AppRoutes() {
         path="/admin/payments"
         element={
           <ProtectedRoute requireAdmin={true}>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <AdminDashboard defaultTab="payments" />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
       />
@@ -224,9 +350,9 @@ function AppRoutes() {
         path="/admin/settings/payment"
         element={
           <ProtectedRoute requireAdmin={true}>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <AdminDashboard defaultTab="payment-settings" />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
       />
@@ -234,9 +360,9 @@ function AppRoutes() {
         path="/admin/plans"
         element={
           <ProtectedRoute requireAdmin={true}>
-            <AppLayout requireSidebar={true}>
+            <DashboardLayout>
               <AdminDashboard defaultTab="plans" />
-            </AppLayout>
+            </DashboardLayout>
           </ProtectedRoute>
         }
       />

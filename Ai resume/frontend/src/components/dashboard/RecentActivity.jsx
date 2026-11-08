@@ -1,7 +1,8 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
-import { Clock, Send } from 'lucide-react';
+import { Clock, Send, Eye, ArrowRight } from 'lucide-react';
 
 const RecentActivity = ({ applications = [] }) => {
   const statusBadges = {
@@ -16,7 +17,16 @@ const RecentActivity = ({ applications = [] }) => {
     <Card>
       <div className="flex items-center justify-between mb-4">
         <h4 className="text-base font-bold text-slate-900 dark:text-white">Recent Applications</h4>
-        <span className="text-xs text-slate-500 dark:text-slate-400">{applications.length} submitted</span>
+        {applications.length > 0 ? (
+          <Link
+            to="/candidate/applications"
+            className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+          >
+            Open Tracker ({applications.length}) <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        ) : (
+          <span className="text-xs text-slate-500 dark:text-slate-400">0 submitted</span>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -44,10 +54,15 @@ const RecentActivity = ({ applications = [] }) => {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                {app.viewed_by_recruiter && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                    <Eye className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Viewed
+                  </span>
+                )}
                 {app.match_score && (
                   <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded">
-                    {app.match_score}% Match
+                    {Math.round(app.match_score)}% Match
                   </span>
                 )}
                 <Badge variant={statusBadges[app.status] || 'default'}>

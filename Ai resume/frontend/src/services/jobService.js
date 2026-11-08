@@ -6,6 +6,11 @@ export const jobService = {
     return response.data;
   },
 
+  async getCategories() {
+    const response = await api.get('/jobs/categories');
+    return response.data;
+  },
+
   async getJob(jobId) {
     const response = await api.get(`/jobs/${jobId}`);
     return response.data;
@@ -21,8 +26,12 @@ export const jobService = {
     return response.data;
   },
 
-  async applyToJob(jobId, resumeId) {
-    const response = await api.post('/applications/', { job_id: jobId, resume_id: resumeId });
+  async applyToJob(jobId, resumeId, expectedSalary = null) {
+    const payload = { job_id: jobId, resume_id: resumeId };
+    if (expectedSalary !== null && expectedSalary !== undefined && expectedSalary !== '') {
+      payload.expected_salary = Number(expectedSalary);
+    }
+    const response = await api.post('/applications/', payload);
     return response.data;
   },
 
@@ -31,8 +40,10 @@ export const jobService = {
     return response.data;
   },
 
-  async getJobApplications(jobId) {
-    const response = await api.get(`/applications/job/${jobId}`);
+  async getJobApplications(jobId, blindMode = false) {
+    const response = await api.get(`/applications/job/${jobId}`, {
+      params: blindMode ? { blind_mode: true } : {},
+    });
     return response.data;
   },
 
@@ -41,8 +52,10 @@ export const jobService = {
     return response.data;
   },
 
-  async getApplicationDossier(applicationId) {
-    const response = await api.get(`/applications/${applicationId}/dossier`);
+  async getApplicationDossier(applicationId, blindMode = false) {
+    const response = await api.get(`/applications/${applicationId}/dossier`, {
+      params: blindMode ? { blind_mode: true } : {},
+    });
     return response.data;
   },
 
@@ -51,13 +64,18 @@ export const jobService = {
     return response.data;
   },
 
+  async getShortlistedCandidates(params = {}) {
+    const response = await api.get('/recruiter/shortlisted-candidates', { params });
+    return response.data;
+  },
+
   async getMatchedJobs() {
     const response = await api.get('/jobs/matched');
     return response.data;
   },
 
-  async oneClickApply(jobId) {
-    const response = await api.post(`/jobs/${jobId}/apply`);
+  async oneClickApply(jobId, payload = {}) {
+    const response = await api.post(`/jobs/${jobId}/apply`, payload);
     return response.data;
   },
 
@@ -120,5 +138,134 @@ export const jobService = {
     const response = await api.post(`/applications/${applicationId}/schedule-interview`, payload);
     return response.data;
   },
+
+  async scheduleSmartInterview(payload) {
+    const response = await api.post('/recruiter/schedule-interview', payload);
+    return response.data;
+  },
+
+  async sendCandidateMessage(payload) {
+    const response = await api.post('/recruiter/send-message', payload);
+    return response.data;
+  },
+
+  async getCandidateMessages() {
+    const response = await api.get('/candidate/messages');
+    return response.data;
+  },
+
+  async markCandidateMessageRead(messageId) {
+    const response = await api.patch(`/candidate/messages/${messageId}/read`);
+    return response.data;
+  },
+
+  async replyToRecruiterMessage(payload) {
+    const response = await api.post('/candidate/messages/reply', payload);
+    return response.data;
+  },
+
+  async getCandidateUnreadMessagesCount() {
+    const response = await api.get('/candidate/messages/unread-count');
+    return response.data;
+  },
+
+  async getRecruiterInquiries() {
+    const response = await api.get('/recruiter/inquiries');
+    return response.data;
+  },
+
+  async getRecruiterUnreadInquiriesCount() {
+    const response = await api.get('/recruiter/inquiries/unread-count');
+    return response.data;
+  },
+
+  async markRecruiterInquiryRead(inquiryId) {
+    const response = await api.patch(`/recruiter/inquiries/${inquiryId}/read`);
+    return response.data;
+  },
+
+  async markApplicationViewed(applicationId) {
+    const response = await api.post(`/applications/${applicationId}/view`);
+    return response.data;
+  },
+
+  async runCodeSandbox(payload) {
+    const response = await api.post('/assessments/run-code', payload);
+    return response.data;
+  },
+
+  async submitVivaAudio(jobId, formData) {
+    const response = await api.post(`/assessments/${jobId}/submit-viva`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  async startAdaptiveExam(payload) {
+    const response = await api.post('/assessments/adaptive/start', payload);
+    return response.data;
+  },
+
+  async submitAdaptiveNext(payload) {
+    const response = await api.post('/assessments/adaptive/next', payload);
+    return response.data;
+  },
+
+  async generateOfferLetterDraft(payload) {
+    const response = await api.post('/offer-letters/generate-draft', payload);
+    return response.data;
+  },
+
+  async sendOfficialOfferLetter(payload) {
+    const response = await api.post('/offer-letters/send', payload);
+    return response.data;
+  },
+
+  async getOfferLetter(applicationId) {
+    const response = await api.get(`/offer-letters/${applicationId}`);
+    return response.data;
+  },
+
+  async respondToOfferLetter(offerId, payload) {
+    const response = await api.post(`/offer-letters/${offerId}/respond`, payload);
+    return response.data;
+  },
+
+  async uploadApplicationVideoPitch(applicationId, formData) {
+    const response = await api.post(`/applications/${applicationId}/upload-video-pitch`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  async uploadVideoPitch(formData) {
+    const response = await api.post('/applications/upload-video-pitch', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  async getApplicationEvaluations(applicationId) {
+    const response = await api.get(`/applications/${applicationId}/evaluations`);
+    return response.data;
+  },
+
+  async submitApplicationEvaluation(applicationId, payload) {
+    const response = await api.post(`/applications/${applicationId}/evaluations`, payload);
+    return response.data;
+  },
+
+  async deleteApplicationEvaluation(applicationId, noteId) {
+    const response = await api.delete(`/applications/${applicationId}/evaluations/${noteId}`);
+    return response.data;
+  },
 };
+
+
 

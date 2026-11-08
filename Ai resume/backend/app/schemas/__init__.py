@@ -50,6 +50,11 @@ from app.schemas.notification import (
     NotificationCreate,
     NotificationResponse,
 )
+from app.schemas.recruiter_note import (
+    EvaluationNoteCreate,
+    EvaluationNoteResponse,
+    EvaluationSummaryResponse,
+)
 
 __all__ = [
     "UserRegister",

@@ -45,6 +45,10 @@ const Navbar = () => {
   const dropdownRef = useRef(null);
   const notifDropdownRef = useRef(null);
 
+  const userRole = user?.role?.toUpperCase();
+  const isRecruiterUser = userRole === 'RECRUITER' || userRole === 'SUBSCRIBER' || isSubscriber || viewMode === 'recruiter';
+  const findJobsTarget = isAuthenticated ? (isRecruiterUser ? '/jobs' : '/candidate/jobs') : '/jobs';
+
   // Close dropdown on outside click
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -76,7 +80,7 @@ const Navbar = () => {
         {/* Public Navigation */}
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
           <Link
-            to="/jobs"
+            to={findJobsTarget}
             className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1.5"
           >
             <Briefcase className="w-4 h-4" /> Find Jobs

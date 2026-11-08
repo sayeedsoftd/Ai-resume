@@ -15,6 +15,14 @@ class JobBase(BaseModel):
     salary_range: Optional[str] = None
     is_active: Optional[bool] = True
 
+    # BDjobs-style Industry Categorization, Workplace Type, and Salary Range
+    category: Optional[str] = "Software Engineering"
+    workplace_type: Optional[str] = "ON_SITE"
+    min_salary: Optional[float] = None
+    max_salary: Optional[float] = None
+    is_salary_negotiable: Optional[bool] = False
+    experience_years_required: Optional[int] = 0
+
     # Assessment Pipeline Configurations
     passing_score: Optional[float] = 70.0
     has_manual_stage: Optional[bool] = False
@@ -34,6 +42,12 @@ class JobUpdate(BaseModel):
     location: Optional[str] = None
     job_type: Optional[JobType] = None
     salary_range: Optional[str] = None
+    category: Optional[str] = None
+    workplace_type: Optional[str] = None
+    min_salary: Optional[float] = None
+    max_salary: Optional[float] = None
+    is_salary_negotiable: Optional[bool] = None
+    experience_years_required: Optional[int] = None
     is_active: Optional[bool] = None
     status: Optional[str] = None
     is_deleted: Optional[bool] = None
@@ -93,6 +107,12 @@ class MatchedJobItem(BaseModel):
     location: str
     job_type: str
     salary_range: Optional[str] = None
+    category: Optional[str] = "Software Engineering"
+    workplace_type: Optional[str] = "ON_SITE"
+    min_salary: Optional[float] = None
+    max_salary: Optional[float] = None
+    is_salary_negotiable: Optional[bool] = False
+    experience_years_required: Optional[int] = 0
     match_score: float
     match_level: str
     shortlist_status: Optional[str] = "Filtered / Under Review"

@@ -40,6 +40,28 @@ def init_db_and_seed():
             if "is_deleted" not in job_cols:
                 conn.execute(text("ALTER TABLE jobs ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE"))
 
+            # Check job_applications table columns (Anti-Cheating / Proctoring)
+            app_cols = [c["name"] for c in insp.get_columns("job_applications")]
+            if "tab_switch_count" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN tab_switch_count INT NOT NULL DEFAULT 0"))
+            if "is_suspicious" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN is_suspicious BOOLEAN NOT NULL DEFAULT FALSE"))
+            if "proctoring_violations" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN proctoring_violations JSON NULL"))
+            if "submission_reason" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN submission_reason VARCHAR(50) NOT NULL DEFAULT 'NORMAL'"))
+
+            # Check candidate_test_submissions table columns
+            sub_cols = [c["name"] for c in insp.get_columns("candidate_test_submissions")]
+            if "tab_switch_count" not in sub_cols:
+                conn.execute(text("ALTER TABLE candidate_test_submissions ADD COLUMN tab_switch_count INT NOT NULL DEFAULT 0"))
+            if "is_suspicious" not in sub_cols:
+                conn.execute(text("ALTER TABLE candidate_test_submissions ADD COLUMN is_suspicious BOOLEAN NOT NULL DEFAULT FALSE"))
+            if "proctoring_violations" not in sub_cols:
+                conn.execute(text("ALTER TABLE candidate_test_submissions ADD COLUMN proctoring_violations JSON NULL"))
+            if "submission_reason" not in sub_cols:
+                conn.execute(text("ALTER TABLE candidate_test_submissions ADD COLUMN submission_reason VARCHAR(50) NOT NULL DEFAULT 'NORMAL'"))
+
             # Widen notifications type column
             conn.execute(text("ALTER TABLE notifications MODIFY COLUMN type VARCHAR(50) NOT NULL DEFAULT 'SYSTEM'"))
 

@@ -22,21 +22,53 @@ import {
   Check,
   RotateCcw,
   Edit3,
+  ShieldAlert,
+  AlertTriangle,
+  ShieldCheck,
+  Shield,
+  Lock,
+  Unlock,
+  Eye,
+  EyeOff,
+  DollarSign,
+  Code2,
+  Terminal,
+  Radio,
+  Volume2,
+  Mic,
+  ChevronDown,
+  ChevronUp,
+  FileAudio,
+  Zap,
+  TrendingUp,
+  Star,
 } from 'lucide-react';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import { jobService } from '../../services/jobService';
+import ScheduleInterviewModal from './ScheduleInterviewModal';
+import SalaryBenchmarkWidget from './SalaryBenchmarkWidget';
+import OfferLetterModal from './OfferLetterModal';
+import TeamEvaluationsPanel from './TeamEvaluationsPanel';
+import {
+  maskCandidateDetails,
+  sanitizeParsedResume,
+} from '../../utils/blindHiring';
 
 export default function ApplicantDossierModal({
   isOpen,
   onClose,
   applicationId,
   onDecisionMade,
+  blindMode = true,
 }) {
   const [loading, setLoading] = useState(true);
   const [dossier, setDossier] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
-  const [activeTab, setActiveTab] = useState('cv'); // 'cv' | 'test'
+  const [activeTab, setActiveTab] = useState('cv'); // 'cv' | 'test' | 'code' | 'stage2' | 'viva'
+  const [isBlindMode, setIsBlindMode] = useState(blindMode);
+  const [showRevealPrompt, setShowRevealPrompt] = useState(false);
+  const [isTranscriptOpen, setIsTranscriptOpen] = useState(true);
 
   // Decision Modal State
   const [decisionType, setDecisionType] = useState(null); // 'SHORTLIST' | 'REJECT' | 'SCHEDULE_INTERVIEW' | null
@@ -46,18 +78,23 @@ export default function ApplicantDossierModal({
   const [recruiterNote, setRecruiterNote] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [submittingDecision, setSubmittingDecision] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+
+  useEffect(() => {
+    setIsBlindMode(blindMode);
+  }, [blindMode, isOpen, applicationId]);
 
   useEffect(() => {
     if (isOpen && applicationId) {
-      loadDossier();
+      loadDossier(isBlindMode);
     }
-  }, [isOpen, applicationId]);
+  }, [isOpen, applicationId, isBlindMode]);
 
-  const loadDossier = async () => {
+  const loadDossier = async (blind = isBlindMode) => {
     setLoading(true);
     setErrorMsg('');
     try {
-      const data = await jobService.getApplicationDossier(applicationId);
+      const data = await jobService.getApplicationDossier(applicationId, blind);
       setDossier(data);
     } catch (err) {
       console.error('Failed to load applicant dossier:', err);
@@ -75,8 +112,45 @@ export default function ApplicantDossierModal({
   const candidate = dossier?.candidate;
   const job = dossier?.job;
   const resume = dossier?.resume;
-  const parsedData = resume?.parsed_data || {};
+  const rawParsedData = resume?.parsed_data || {};
+  const parsedData = isBlindMode
+    ? sanitizeParsedResume(rawParsedData, candidate?.full_name, true)
+    : rawParsedData;
   const testSub = dossier?.screening_submission;
+  const codingInspection = dossier?.coding_inspection;
+  const candCode = codingInspection?.candidate_code || testSub?.candidate_code || app?.candidate_code;
+  const codeLang = codingInspection?.code_language || testSub?.code_language || app?.code_language || 'python';
+  const codeEval = codingInspection?.code_evaluation || testSub?.code_evaluation || app?.code_evaluation;
+  const codingScore =
+    codingInspection?.coding_score !== undefined && codingInspection?.coding_score !== null
+      ? codingInspection.coding_score
+      : testSub?.coding_score !== undefined && testSub?.coding_score !== null
+      ? testSub.coding_score
+      : app?.coding_score;
+  const challenge = codingInspection?.challenge || testSub?.coding_challenge;
+
+  const vivaInspection = dossier?.viva_inspection;
+  const vivaAudioUrl = vivaInspection?.viva_audio_url || app?.viva_audio_url || testSub?.viva_audio_url;
+  const vivaScore =
+    vivaInspection?.viva_score !== undefined && vivaInspection?.viva_score !== null
+      ? vivaInspection.viva_score
+      : app?.viva_score !== undefined && app?.viva_score !== null
+      ? app.viva_score
+      : testSub?.viva_score;
+  const vivaTranscript = vivaInspection?.viva_transcription || app?.viva_transcription || testSub?.viva_transcription;
+  const vivaEval = vivaInspection?.viva_evaluation || app?.viva_evaluation || testSub?.viva_evaluation;
+  const vivaPrompt = vivaInspection?.viva_prompt || 'Oral Technical Viva Question';
+  const videoPitchUrl = app?.video_pitch_url;
+  const adaptiveProf = dossier?.adaptive_profile || (testSub?.adaptive_skill_curve || app?.adaptive_skill_curve ? {
+    ability_rating: testSub?.adaptive_ability_rating || app?.adaptive_ability_rating,
+    theta_score: testSub?.adaptive_theta_score ?? app?.adaptive_theta_score ?? 50.0,
+    skill_curve: testSub?.adaptive_skill_curve || app?.adaptive_skill_curve || [],
+    tier_distribution: testSub?.adaptive_tier_distribution || app?.adaptive_tier_distribution || {},
+  } : null);
+  const candidateMask = maskCandidateDetails(
+    { ...candidate, id: applicationId, user_id: candidate?.id },
+    isBlindMode
+  );
 
   const handleExecuteDecision = async (statusToSet) => {
     setSubmittingDecision(true);
@@ -144,35 +218,77 @@ export default function ApplicantDossierModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
       <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-        {/* Modal Header */}
-        <div className="p-5 sm:px-7 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/70 dark:bg-slate-800/60 shrink-0">
-          <div>
+        {/* Anti-Bias Mode Active Notification Pill */}
+        {isBlindMode && (
+          <div className="px-5 sm:px-7 py-2.5 bg-emerald-500/10 dark:bg-emerald-950/40 border-b border-emerald-500/20 text-xs flex items-center justify-between gap-3 text-emerald-900 dark:text-emerald-200 shrink-0">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
-                Applicant Dossier & Answer Sheet
-              </span>
-              <span className="text-slate-300 dark:text-slate-700">•</span>
-              <span className="text-xs font-semibold text-slate-500">
-                Application #{applicationId}
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="text-[11px] sm:text-xs">
+                <strong>Anti-Bias Mode Active:</strong> Candidate personal demographics, university names, and contact identifiers are masked for objective merit evaluation.
               </span>
             </div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-0.5">
-              {candidate?.full_name || 'Candidate Review'}
-            </h2>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1">
-              <span className="flex items-center gap-1">
-                <Mail className="w-3.5 h-3.5" /> {candidate?.email}
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
-                <Briefcase className="w-3.5 h-3.5" /> {job?.title}
-              </span>
+            <button
+              onClick={() => {
+                setIsBlindMode(false);
+                loadDossier(false);
+              }}
+              className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1 shrink-0 bg-emerald-100 dark:bg-emerald-900/60 px-2.5 py-1 rounded-lg border border-emerald-300 dark:border-emerald-700 transition-colors"
+              title="Reveal candidate personal details"
+            >
+              <Eye className="w-3 h-3" /> Reveal Real Identity
+            </button>
+          </div>
+        )}
+
+        {/* Modal Header */}
+        <div className="p-5 sm:px-7 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/70 dark:bg-slate-800/60 shrink-0">
+          <div className="flex items-start gap-3">
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 mt-0.5 border ${
+              isBlindMode
+                ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-700'
+                : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800'
+            }`}>
+              <User className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                  Applicant Dossier & Answer Sheet
+                </span>
+                <span className="text-slate-300 dark:text-slate-700">•</span>
+                <span className="text-xs font-semibold text-slate-500">
+                  Application #{applicationId}
+                </span>
+                {isBlindMode && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                    🛡️ Anti-Bias Protected
+                  </span>
+                )}
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-0.5">
+                {candidateMask.displayName}
+              </h2>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <span className="flex items-center gap-1">
+                  <Mail className="w-3.5 h-3.5 text-slate-400" /> {candidateMask.email}
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
+                  <Briefcase className="w-3.5 h-3.5 text-slate-400" /> {job?.title}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             {/* Quick Status / ATS / Test Badges */}
             <div className="flex items-center gap-1.5 flex-wrap">
+              {(app?.is_suspicious || (app?.tab_switch_count && app?.tab_switch_count > 2) || app?.submission_reason === 'AUTO_PROCTOR_VIOLATION' || testSub?.is_suspicious) && (
+                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1 animate-pulse">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                  ⚠️ Suspicion Flag: High Proctoring Risk
+                </span>
+              )}
               {app?.match_score && (
                 <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
                   ATS: {Math.round(app.match_score)}%
@@ -187,6 +303,53 @@ export default function ApplicantDossierModal({
                   Test: Pending
                 </span>
               )}
+              {/* Expected Salary & Budget Gatekeeper Badge */}
+              {app?.expected_salary != null && (() => {
+                const maxBudget = job?.max_salary ? Number(job.max_salary) : null;
+                const isWithinBudget = maxBudget !== null ? app.expected_salary <= maxBudget : null;
+                const diff = maxBudget !== null && app.expected_salary > maxBudget ? app.expected_salary - maxBudget : 0;
+
+                if (isWithinBudget === true) {
+                  return (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 dark:bg-emerald-950/80 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1.5 shadow-2xs">
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      Expected: ৳{Number(app.expected_salary).toLocaleString()}
+                      <span className="px-1.5 py-0.2 rounded-full bg-emerald-200 dark:bg-emerald-800 text-[10px] font-black tracking-wide">
+                        [ Within Budget ]
+                      </span>
+                    </span>
+                  );
+                } else if (isWithinBudget === false) {
+                  return (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 shadow-2xs">
+                      <DollarSign className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                      Expected: ৳{Number(app.expected_salary).toLocaleString()}
+                      <span className="px-1.5 py-0.2 rounded-full bg-amber-200 dark:bg-amber-800 text-[10px] font-black tracking-wide">
+                        [ Above Budget: +৳{diff.toLocaleString()} ]
+                      </span>
+                    </span>
+                  );
+                } else {
+                  return (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 flex items-center gap-1">
+                      <DollarSign className="w-3.5 h-3.5 text-slate-500" />
+                      Expected: ৳{Number(app.expected_salary).toLocaleString()}
+                    </span>
+                  );
+                }
+              })()}
+
+              {videoPitchUrl && (
+                <button
+                  onClick={() => setActiveTab('pitch')}
+                  className="px-2.5 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1.5 hover:bg-rose-200 dark:hover:bg-rose-900 transition-colors cursor-pointer"
+                  title="Click to view candidate 60s elevator video pitch"
+                >
+                  <Video className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                  🎥 60s Video Pitch Available
+                </button>
+              )}
+
               <span className="px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
                 {app?.status || 'APPLIED'}
               </span>
@@ -202,7 +365,7 @@ export default function ApplicantDossierModal({
         </div>
 
         {/* Tab Navigator */}
-        <div className="px-6 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-4 shrink-0">
+        <div className="px-6 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-4 shrink-0 overflow-x-auto">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('cv')}
@@ -227,6 +390,61 @@ export default function ApplicantDossierModal({
               Tab 2: Screening Test Evaluation & Answer Sheet (25 MCQs + 5 Written)
             </button>
 
+            <button
+              onClick={() => setActiveTab('code')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'code'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Code2 className="w-4 h-4" />
+              Technical Code Inspection
+              {codingScore !== undefined && codingScore !== null && (
+                <span className="px-1.5 py-0.2 rounded text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200 font-mono font-bold">
+                  {Math.round(codingScore)}%
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('viva')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'viva'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Radio className="w-4 h-4" />
+              Voice Viva Screening
+              {vivaScore !== undefined && vivaScore !== null && (
+                <span className="px-1.5 py-0.2 rounded text-[10px] bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-200 font-bold">
+                  {Math.round(vivaScore)}%
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('pitch')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'pitch'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Video className="w-4 h-4" />
+              60s Video Pitch
+              {videoPitchUrl ? (
+                <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-400 text-slate-900 font-black">
+                  Available
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-200 dark:bg-slate-700 text-slate-500 font-bold">
+                  None
+                </span>
+              )}
+            </button>
+
             {(job?.has_manual_stage || dossier?.stage2_questions || dossier?.stage2_submission || app?.stage2_submission) && (
               <button
                 onClick={() => setActiveTab('stage2')}
@@ -245,17 +463,48 @@ export default function ApplicantDossierModal({
                 )}
               </button>
             )}
+
+            <button
+              onClick={() => setActiveTab('evaluations')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                activeTab === 'evaluations'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+              Team Notes & Ratings
+              {dossier?.team_evaluations_summary?.total_evaluators > 0 ? (
+                <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-100 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200 font-bold">
+                  {dossier.team_evaluations_summary.average_rating}★ ({dossier.team_evaluations_summary.total_evaluators})
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-200 dark:bg-slate-700 text-slate-500 font-bold">
+                  Review
+                </span>
+              )}
+            </button>
           </div>
 
           {resumeUrl && (
-            <a
-              href={resumeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 shrink-0"
-            >
-              <ExternalLink className="w-3.5 h-3.5" /> Open Resume PDF
-            </a>
+            isBlindMode ? (
+              <button
+                onClick={() => setShowRevealPrompt(true)}
+                className="text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-800 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors shrink-0"
+                title="Raw PDF contains personal photos and demographics. Click to reveal identity."
+              >
+                <Lock className="w-3.5 h-3.5" /> PDF Protected in Anti-Bias Mode
+              </button>
+            ) : (
+              <a
+                href={resumeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 shrink-0"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Open Resume PDF
+              </a>
+            )
           )}
         </div>
 
@@ -279,6 +528,64 @@ export default function ApplicantDossierModal({
                TAB 1: CANDIDATE CV & ATS OVERVIEW
                ========================================================= */
             <div className="space-y-6">
+              {/* AI Salary Benchmark & Employer Budget Fit Card */}
+              {app?.expected_salary != null && (
+                <SalaryBenchmarkWidget
+                  expectedSalary={app.expected_salary}
+                  jobMinSalary={job?.min_salary}
+                  jobMaxSalary={job?.max_salary}
+                  salaryFitStatus={app?.salary_fit_status}
+                  benchmarkAnalysis={dossier?.ai_salary_benchmark_analysis || app?.ai_salary_benchmark_analysis}
+                  compact={false}
+                />
+              )}
+
+              {/* Oral Technical Viva Screening Overview Banner */}
+              {(vivaAudioUrl || vivaScore !== undefined) && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 dark:from-purple-950/40 dark:via-slate-900 dark:to-purple-950/40 border border-purple-200 dark:border-purple-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2 rounded-xl bg-purple-600 text-white shadow-xs shrink-0">
+                      <Radio className="w-4 h-4 animate-pulse" />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <strong className="text-slate-900 dark:text-white font-bold">
+                          Oral Technical Viva Screening Completed
+                        </strong>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-700">
+                          🎙️ Viva Score: {Math.round(vivaScore || 0)}%
+                        </span>
+                        {vivaEval?.confidence_and_tone && (
+                          <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300">
+                            • {vivaEval.confidence_and_tone}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5 line-clamp-1">
+                        {vivaEval?.ai_viva_summary || vivaTranscript || 'Oral audio evaluation processed by Gemini Pro.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+                    {vivaAudioUrl && (
+                      <audio
+                        src={vivaAudioUrl.startsWith('http') ? vivaAudioUrl : `http://127.0.0.1:8000${vivaAudioUrl}`}
+                        controls
+                        className="h-8 max-w-[190px]"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('viva')}
+                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] transition-colors"
+                    >
+                      View Viva & Transcript →
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* ATS 4-Factor Breakdown Card */}
               <div className="bg-gradient-to-br from-indigo-50/70 via-white to-violet-50/50 dark:from-slate-900 dark:via-slate-850 dark:to-indigo-950/30 p-6 rounded-2xl border border-indigo-100 dark:border-indigo-900/40 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -426,7 +733,9 @@ export default function ApplicantDossierModal({
                         <strong className="block font-bold text-slate-900 dark:text-white">
                           {edu.degree || edu.major || 'Degree'}
                         </strong>
-                        <span className="text-slate-500">{edu.institution}</span>
+                        <span className="text-slate-500">
+                          {isBlindMode ? 'Accredited University' : edu.institution || 'Accredited University'}
+                        </span>
                         <div className="text-[11px] text-slate-400 mt-1">
                           Graduation: {edu.graduation_year || 'N/A'}{' '}
                           {edu.gpa ? `• GPA: ${edu.gpa}` : ''}
@@ -491,6 +800,247 @@ export default function ApplicantDossierModal({
                         </span>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Dynamic AI Adaptive Testing & Skill Ceiling Card */}
+                  {adaptiveProf && (
+                    <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-indigo-900/40 via-slate-900 to-purple-950/40 border border-indigo-500/30 dark:border-indigo-500/30 text-white space-y-4 shadow-sm">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-500/20 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300">
+                            <Zap className="w-5 h-5 text-indigo-400" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-black uppercase tracking-wider text-white">
+                                Dynamic Adaptive Testing & Demonstrated Ceiling
+                              </h4>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                                Item Response Model
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-300">
+                              Latent competency calibration via multi-tiered algorithmic question paths
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-auto">
+                          <span className="px-3 py-1 rounded-full text-xs font-black bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm border border-indigo-300/30">
+                            🏆 {adaptiveProf.ability_rating || 'Senior / Expert Architecture'}
+                          </span>
+                          <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-slate-800 text-indigo-300 border border-indigo-700/50">
+                            Theta: {Number(adaptiveProf.theta_score || 50).toFixed(1)} / 100
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Tier Distribution Multipliers & Results */}
+                      {adaptiveProf.tier_distribution && Object.keys(adaptiveProf.tier_distribution).length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                          {Object.entries(adaptiveProf.tier_distribution).map(([tKey, tData]) => {
+                            const tierPills = {
+                              EASY: { label: '🟢 Foundational', weight: '1.0x', border: 'border-emerald-500/30', bg: 'bg-emerald-950/30' },
+                              MEDIUM: { label: '🟡 Applied', weight: '1.5x', border: 'border-amber-500/30', bg: 'bg-amber-950/30' },
+                              HARD: { label: '🟣 Deep Technical', weight: '2.2x', border: 'border-purple-500/30', bg: 'bg-purple-950/30' },
+                              EXPERT: { label: '🔴 Expert Arch.', weight: '3.0x', border: 'border-rose-500/30', bg: 'bg-rose-950/30' },
+                            };
+                            const info = tierPills[tKey] || { label: tKey, weight: '1.0x', border: 'border-slate-700', bg: 'bg-slate-800' };
+                            return (
+                              <div key={tKey} className={`p-3 rounded-xl border ${info.border} ${info.bg} space-y-1`}>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-bold text-slate-200">{info.label}</span>
+                                  <span className="text-[10px] font-mono text-slate-400">{info.weight}</span>
+                                </div>
+                                <div className="flex items-baseline justify-between pt-0.5">
+                                  <span className="text-base font-black text-white font-mono">
+                                    {tData.correct || 0} / {tData.attempted || 0}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">
+                                    {tData.attempted ? Math.round(((tData.correct || 0) / tData.attempted) * 100) : 0}% Acc.
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Adaptive Step Curve Interactive Progression Chart */}
+                      {adaptiveProf.skill_curve && adaptiveProf.skill_curve.length > 0 && (
+                        <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-200">
+                              Candidate Latent Ability Trajectory (Step Progression):
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              15 Sequential Adaptive Challenge Iterations
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            {adaptiveProf.skill_curve.map((step, sIdx) => {
+                              const stepTierStyles = {
+                                EASY: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+                                MEDIUM: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+                                HARD: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+                                EXPERT: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+                              };
+                              return (
+                                <div
+                                  key={sIdx}
+                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold border flex items-center gap-1.5 ${stepTierStyles[step.tier] || 'bg-slate-800 text-slate-300 border-slate-700'}`}
+                                  title={`Step ${step.question_number || sIdx + 1}: ${step.tier} (Weight: ${step.weight || 1.5}x) - ${step.is_correct ? 'Correct' : 'Incorrect'} | Theta: ${step.theta_after}`}
+                                >
+                                  <span className="text-slate-400">#{step.question_number || sIdx + 1}</span>
+                                  <span>{step.tier}</span>
+                                  <span className={step.is_correct ? 'text-emerald-400 font-black' : 'text-rose-400 font-black'}>
+                                    {step.is_correct ? '✔' : '✘'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Anti-Cheating & Proctoring Audit Report Card */}
+                  <div
+                    className={`p-5 rounded-2xl border ${
+                      testSub.is_suspicious ||
+                      app?.is_suspicious ||
+                      (testSub.tab_switch_count && testSub.tab_switch_count > 2) ||
+                      (app?.tab_switch_count && app?.tab_switch_count > 2) ||
+                      testSub.submission_reason === 'AUTO_PROCTOR_VIOLATION' ||
+                      app?.submission_reason === 'AUTO_PROCTOR_VIOLATION'
+                        ? 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800'
+                        : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
+                    } space-y-3`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
+                      <div className="flex items-center gap-2">
+                        <ShieldAlert
+                          className={`w-5 h-5 ${
+                            testSub.is_suspicious ||
+                            app?.is_suspicious ||
+                            (testSub.tab_switch_count && testSub.tab_switch_count > 2) ||
+                            (app?.tab_switch_count && app?.tab_switch_count > 2) ||
+                            testSub.submission_reason === 'AUTO_PROCTOR_VIOLATION' ||
+                            app?.submission_reason === 'AUTO_PROCTOR_VIOLATION'
+                              ? 'text-rose-600 dark:text-rose-400'
+                              : 'text-indigo-600 dark:text-indigo-400'
+                          }`}
+                        />
+                        <div>
+                          <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                            Proctoring & Anti-Cheating Audit Report
+                          </h4>
+                          <span className="text-[11px] text-slate-500">
+                            Real-time candidate focus monitoring & violation logs
+                          </span>
+                        </div>
+                      </div>
+
+                      {testSub.is_suspicious ||
+                      app?.is_suspicious ||
+                      (testSub.tab_switch_count && testSub.tab_switch_count > 2) ||
+                      (app?.tab_switch_count && app?.tab_switch_count > 2) ||
+                      testSub.submission_reason === 'AUTO_PROCTOR_VIOLATION' ||
+                      app?.submission_reason === 'AUTO_PROCTOR_VIOLATION' ? (
+                        <span className="px-3 py-1 rounded-full text-xs font-black bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-100 border border-rose-300 flex items-center gap-1.5 self-start sm:self-auto">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          High Proctoring Risk Flagged
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 flex items-center gap-1.5 self-start sm:self-auto">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Normal Proctoring Status
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                          Tab Switches Detected
+                        </span>
+                        <span className="text-base font-black text-slate-900 dark:text-white mt-0.5 block">
+                          {testSub.tab_switch_count ?? app?.tab_switch_count ?? 0} switches
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                          Submission Mode
+                        </span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white mt-0.5 block uppercase">
+                          {testSub.submission_reason || app?.submission_reason || 'NORMAL'}
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                          Integrity Status
+                        </span>
+                        <span
+                          className={`text-sm font-black mt-0.5 block ${
+                            testSub.is_suspicious ||
+                            app?.is_suspicious ||
+                            (testSub.tab_switch_count && testSub.tab_switch_count > 2) ||
+                            (app?.tab_switch_count && app?.tab_switch_count > 2)
+                              ? 'text-rose-600 dark:text-rose-400'
+                              : 'text-emerald-600 dark:text-emerald-400'
+                          }`}
+                        >
+                          {testSub.is_suspicious ||
+                          app?.is_suspicious ||
+                          (testSub.tab_switch_count && testSub.tab_switch_count > 2) ||
+                          (app?.tab_switch_count && app?.tab_switch_count > 2)
+                            ? 'FLAGGED AS SUSPICIOUS'
+                            : 'CLEARED'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Violation Log Events List */}
+                    {((testSub.proctoring_violations &&
+                      Array.isArray(testSub.proctoring_violations) &&
+                      testSub.proctoring_violations.length > 0) ||
+                      (app?.proctoring_violations &&
+                        Array.isArray(app.proctoring_violations) &&
+                        app.proctoring_violations.length > 0)) && (
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 block">
+                          Violation Incident Logs & Timestamps:
+                        </span>
+                        <div className="space-y-1 max-h-36 overflow-y-auto">
+                          {(
+                            testSub.proctoring_violations ||
+                            app?.proctoring_violations ||
+                            []
+                          ).map((violation, vIdx) => (
+                            <div
+                              key={vIdx}
+                              className="text-[11px] p-2 rounded-lg bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-slate-700 dark:text-slate-300"
+                            >
+                              <span className="font-medium">
+                                {violation.event ||
+                                  (typeof violation === 'string'
+                                    ? violation
+                                    : JSON.stringify(violation))}
+                              </span>
+                              {violation.timestamp && (
+                                <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-2">
+                                  {violation.timestamp}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* 25 MCQs Answer Sheet Section */}
@@ -752,6 +1302,91 @@ export default function ApplicantDossierModal({
                           </div>
                         </div>
 
+                        {/* Stage-2 Proctoring Report Card */}
+                        {(sub.tab_switch_count !== undefined ||
+                          sub.is_suspicious !== undefined ||
+                          app?.tab_switch_count !== undefined) && (
+                          <div
+                            className={`p-4 rounded-2xl border ${
+                              sub.is_suspicious ||
+                              (sub.tab_switch_count && sub.tab_switch_count > 2) ||
+                              sub.submission_reason === 'AUTO_PROCTOR_VIOLATION'
+                                ? 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800'
+                                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
+                            } space-y-2.5`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5 text-slate-900 dark:text-white">
+                                <ShieldAlert
+                                  className={`w-4 h-4 ${
+                                    sub.is_suspicious ||
+                                    (sub.tab_switch_count && sub.tab_switch_count > 2)
+                                      ? 'text-rose-600 dark:text-rose-400'
+                                      : 'text-purple-600 dark:text-purple-400'
+                                  }`}
+                                />
+                                Stage-2 Anti-Cheating & Focus Audit
+                              </span>
+                              {sub.is_suspicious ||
+                              (sub.tab_switch_count && sub.tab_switch_count > 2) ||
+                              sub.submission_reason === 'AUTO_PROCTOR_VIOLATION' ? (
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-100 border border-rose-300 flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Suspicious Submission
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300">
+                                  Proctoring Clean
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-600 dark:text-slate-300 flex flex-wrap items-center gap-3 font-medium">
+                              <span>
+                                Focus Losses / Tab Switches:{' '}
+                                <strong className="font-bold text-slate-900 dark:text-white">
+                                  {sub.tab_switch_count ?? app?.tab_switch_count ?? 0}
+                                </strong>
+                              </span>
+                              <span>•</span>
+                              <span>
+                                Submission Mode:{' '}
+                                <strong className="font-bold uppercase text-slate-900 dark:text-white">
+                                  {sub.submission_reason || app?.submission_reason || 'NORMAL'}
+                                </strong>
+                              </span>
+                            </div>
+                            {sub.proctoring_violations &&
+                              Array.isArray(sub.proctoring_violations) &&
+                              sub.proctoring_violations.length > 0 && (
+                                <div className="space-y-1 pt-1">
+                                  <span className="text-[10px] uppercase font-bold text-slate-500 block">
+                                    Incident Log:
+                                  </span>
+                                  <div className="space-y-1 max-h-28 overflow-y-auto">
+                                    {sub.proctoring_violations.map((violation, vIdx) => (
+                                      <div
+                                        key={vIdx}
+                                        className="text-[11px] p-1.5 rounded-lg bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 flex items-center justify-between"
+                                      >
+                                        <span>
+                                          {violation.event ||
+                                            (typeof violation === 'string'
+                                              ? violation
+                                              : JSON.stringify(violation))}
+                                        </span>
+                                        {violation.timestamp && (
+                                          <span className="text-[10px] text-slate-400 font-mono ml-2">
+                                            {violation.timestamp}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                          </div>
+                        )}
+
                         {/* Stage-2 Custom MCQs */}
                         {stage2Mcqs.length > 0 && (
                           <div className="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 space-y-4">
@@ -874,6 +1509,456 @@ export default function ApplicantDossierModal({
                 </div>
               )}
             </div>
+          ) : activeTab === 'code' ? (
+            /* =========================================================
+               TAB 4: TECHNICAL CODE INSPECTION & GEMINI EVALUATION
+               ========================================================= */
+            <div className="space-y-6">
+              {/* Header Hero KPI Card */}
+              <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-50/80 via-white to-indigo-50/60 dark:from-slate-900 dark:via-slate-850 dark:to-blue-950/30 border border-blue-200 dark:border-blue-900/50 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-600 dark:text-blue-400">
+                      Technical Assessment Audit
+                    </span>
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2 mt-0.5">
+                      <Code2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      Live Coding Submission & Algorithmic Trace
+                    </h3>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-3.5 py-1.5 rounded-xl font-mono text-xs font-black bg-blue-600 text-white shadow-xs">
+                      Score: {codingScore !== undefined && codingScore !== null ? Math.round(codingScore) : 0}%
+                    </span>
+                    <span className="px-3 py-1.5 rounded-xl font-mono text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+                      {codeLang.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Algorithmic Complexity & Health Metrics */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
+                      Time Complexity
+                    </span>
+                    <span className="text-sm font-black font-mono text-indigo-600 dark:text-indigo-400">
+                      {codeEval?.time_complexity || 'O(N)'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
+                      Space Complexity
+                    </span>
+                    <span className="text-sm font-black font-mono text-purple-600 dark:text-purple-400">
+                      {codeEval?.space_complexity || 'O(1)'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
+                      Code Cleanliness
+                    </span>
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate block">
+                      {codeEval?.code_cleanliness_rating || 'Clean and idiomatic'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
+                      Edge Cases Handled
+                    </span>
+                    <span
+                      className={`text-xs font-bold ${
+                        codeEval?.edge_cases_handled ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'
+                      }`}
+                    >
+                      {codeEval?.edge_cases_handled ? '✔ All Verified' : '⚠️ Minor Gaps'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Gemini Pro AI Summary & Evaluation Bullets */}
+              {codeEval && (
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 space-y-4">
+                  <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    <Sparkles className="w-4 h-4 text-indigo-500" />
+                    <span>Gemini Pro Algorithmic Evaluation Summary</span>
+                  </div>
+
+                  {codeEval.ai_summary && (
+                    <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                      {codeEval.ai_summary}
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 text-xs">
+                    {codeEval.strengths?.length > 0 && (
+                      <div className="p-3.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 space-y-1.5">
+                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4" /> Demonstrated Strengths:
+                        </span>
+                        <ul className="list-disc list-inside text-slate-700 dark:text-slate-300 space-y-1">
+                          {codeEval.strengths.map((str, idx) => (
+                            <li key={idx}>{str}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {codeEval.weaknesses?.length > 0 && (
+                      <div className="p-3.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 space-y-1.5">
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                          <AlertTriangle className="w-4 h-4" /> Opportunities for Improvement:
+                        </span>
+                        <ul className="list-disc list-inside text-slate-700 dark:text-slate-300 space-y-1">
+                          {codeEval.weaknesses.map((w, idx) => (
+                            <li key={idx}>{w}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Problem Statement Card */}
+              {challenge && (
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 space-y-3">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">
+                    Problem Statement Assigned
+                  </span>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                    {challenge.title || 'Optimal Subarray Target Sum & Deduplication'}
+                  </h4>
+                  <div className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-line leading-relaxed">
+                    {challenge.description}
+                  </div>
+                </div>
+              )}
+
+              {/* Candidate Submitted Code (Read-Only Syntax-Highlighted Block) */}
+              <div className="rounded-2xl border border-slate-700 dark:border-slate-800 bg-[#0d1117] overflow-hidden shadow-xl">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-slate-950 border-b border-slate-800 text-xs">
+                  <div className="flex items-center gap-2 font-mono text-slate-300">
+                    <FileText className="w-3.5 h-3.5 text-blue-400" />
+                    <span>candidate_solution.{codeLang === 'javascript' ? 'js' : 'py'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 text-[10px] font-mono">
+                      {codeLang.toUpperCase()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (candCode) {
+                          navigator.clipboard.writeText(candCode);
+                          alert('Candidate code copied to clipboard!');
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-[11px] font-medium transition-colors"
+                    >
+                      Copy Code
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 font-mono text-xs leading-relaxed text-slate-100 overflow-x-auto max-h-[420px] select-text">
+                  {candCode ? (
+                    <div className="flex">
+                      {/* Line numbers */}
+                      <div className="select-none pr-4 text-right text-slate-600 font-mono border-r border-slate-800">
+                        {candCode.split('\n').map((_, i) => (
+                          <div key={i} className="leading-6">
+                            {i + 1}
+                          </div>
+                        ))}
+                      </div>
+                      {/* Code lines */}
+                      <pre className="pl-4 whitespace-pre font-mono leading-6">
+                        {candCode}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center text-slate-500 font-sans text-xs">
+                      No code submitted for this assessment.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : activeTab === 'viva' ? (
+            /* =========================================================
+               TAB 5: VOICE VIVA SIMULATION & SPEECH SCREENING
+               ========================================================= */
+            <div className="space-y-6">
+              {/* Viva Score & Metrics Hero Card */}
+              <div className="bg-gradient-to-br from-purple-50/70 via-white to-indigo-50/50 dark:from-slate-900 dark:via-slate-850 dark:to-purple-950/40 p-6 rounded-2xl border border-purple-200 dark:border-purple-800/60 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2.5 rounded-2xl bg-purple-600 text-white shadow-md">
+                      <Radio className="w-5 h-5 animate-pulse" />
+                    </span>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 block">
+                        Oral Technical Assessment
+                      </span>
+                      <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        Oral Viva & Speech Screening
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-700">
+                          🎙️ Viva Score: {vivaScore !== undefined && vivaScore !== null ? Math.round(vivaScore) : 0}%
+                        </span>
+                      </h3>
+                    </div>
+                  </div>
+
+                  {vivaEval?.confidence_and_tone && (
+                    <Badge variant="purple" size="sm">
+                      {vivaEval.confidence_and_tone}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Score Breakdown Metrics */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-purple-100 dark:border-purple-900/50">
+                  <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] text-slate-400 block font-bold uppercase">Technical Accuracy (60%)</span>
+                    <span className="text-lg font-black text-purple-600 dark:text-purple-400">
+                      {vivaEval?.technical_accuracy_score || 75}%
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] text-slate-400 block font-bold uppercase">Communication Fluency (40%)</span>
+                    <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                      {vivaEval?.communication_fluency_score || 80}%
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] text-slate-400 block font-bold uppercase">Screening Weight</span>
+                    <span className="text-lg font-black text-slate-700 dark:text-slate-300">
+                      20% of Test
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Viva Question Assigned */}
+              <div className="p-5 rounded-2xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 space-y-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-600 dark:text-purple-400 block">
+                  Candidate Oral Viva Prompt:
+                </span>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-relaxed">
+                  "{vivaPrompt}"
+                </p>
+              </div>
+
+              {/* Embedded Audio Player */}
+              <div className="p-5 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Volume2 className="w-4 h-4 text-purple-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                      Candidate Voice Recording (60s)
+                    </span>
+                  </div>
+                  {vivaAudioUrl && (
+                    <a
+                      href={vivaAudioUrl.startsWith('http') ? vivaAudioUrl : `http://127.0.0.1:8000${vivaAudioUrl}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Download Audio
+                    </a>
+                  )}
+                </div>
+
+                {vivaAudioUrl ? (
+                  <audio
+                    src={vivaAudioUrl.startsWith('http') ? vivaAudioUrl : `http://127.0.0.1:8000${vivaAudioUrl}`}
+                    controls
+                    className="w-full h-10 rounded-lg"
+                  />
+                ) : (
+                  <div className="py-6 text-center text-slate-400 text-xs">
+                    No oral audio recorded for this candidate.
+                  </div>
+                )}
+              </div>
+
+              {/* Collapsible AI Generated Transcript */}
+              {vivaTranscript && (
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 overflow-hidden shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => setIsTranscriptOpen(!isTranscriptOpen)}
+                    className="w-full px-5 py-3.5 flex items-center justify-between text-left border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileAudio className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                        AI Generated Transcript (Gemini Multimodal)
+                      </span>
+                    </div>
+                    {isTranscriptOpen ? (
+                      <ChevronUp className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                    )}
+                  </button>
+
+                  {isTranscriptOpen && (
+                    <div className="p-5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-sans bg-slate-50/60 dark:bg-slate-900/40 italic">
+                      "{vivaTranscript}"
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Gemini Speech Assessor Rationale & Strengths / Improvement Grid */}
+              {vivaEval && (
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                      Gemini Assessor Feedback & Speech Analysis
+                    </span>
+                  </div>
+
+                  {vivaEval.ai_viva_summary && (
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                      <strong>Assessor Summary:</strong> {vivaEval.ai_viva_summary}
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+                    {vivaEval.speech_strengths?.length > 0 && (
+                      <div className="p-3.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 space-y-1.5">
+                        <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4" /> Speech & Technical Strengths:
+                        </span>
+                        <ul className="list-disc list-inside text-slate-700 dark:text-slate-300 space-y-1">
+                          {vivaEval.speech_strengths.map((str, idx) => (
+                            <li key={idx}>{str}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {vivaEval.speech_weaknesses?.length > 0 && (
+                      <div className="p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 space-y-1.5">
+                        <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                          <AlertTriangle className="w-4 h-4" /> Opportunities for Improvement:
+                        </span>
+                        <ul className="list-disc list-inside text-slate-700 dark:text-slate-300 space-y-1">
+                          {vivaEval.speech_weaknesses.map((w, idx) => (
+                            <li key={idx}>{w}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : activeTab === 'pitch' ? (
+            /* =========================================================
+               TAB 6: 60-SECOND ASYNCHRONOUS VIDEO ELEVATOR PITCH
+               ========================================================= */
+            <div className="space-y-6">
+              {/* Video Pitch Overview Card */}
+              <div className="bg-gradient-to-br from-rose-50/70 via-white to-purple-50/50 dark:from-slate-900 dark:via-slate-850 dark:to-rose-950/40 p-6 rounded-2xl border border-rose-200 dark:border-rose-800/60 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2.5 rounded-2xl bg-rose-600 text-white shadow-md">
+                      <Video className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 block">
+                        Asynchronous Elevator Pitch
+                      </span>
+                      <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        Candidate 60-Second Video Pitch
+                        {videoPitchUrl ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
+                            🎥 Video Pitch Available
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+                            Not Submitted
+                          </span>
+                        )}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {videoPitchUrl && (
+                    <a
+                      href={videoPitchUrl.startsWith('http') ? videoPitchUrl : `http://127.0.0.1:8000${videoPitchUrl}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 shadow-xs"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Open / Download Video
+                    </a>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  The candidate recorded this 60-second video elevator pitch using their browser webcam to introduce themselves, communicate their technical domain interests, and showcase verbal fluency.
+                </p>
+              </div>
+
+              {/* Embedded HTML5 Video Player */}
+              <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 shadow-md flex flex-col items-center justify-center">
+                {videoPitchUrl ? (
+                  <div className="w-full max-w-2xl space-y-3">
+                    <video
+                      controls
+                      playsInline
+                      className="w-full max-h-[420px] rounded-xl object-contain bg-black shadow-lg border border-slate-800"
+                      src={videoPitchUrl.startsWith('http') ? videoPitchUrl : `http://127.0.0.1:8000${videoPitchUrl}`}
+                    />
+                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        Verified Candidate Webcam Pitch
+                      </span>
+                      <span className="font-mono text-[11px]">Duration: ~60s Max</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-14 text-center space-y-3 max-w-sm">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-900 text-slate-500 flex items-center justify-center mx-auto border border-slate-800">
+                      <Video className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-200">No Video Pitch Submitted</h4>
+                      <p className="text-xs text-slate-400 mt-1">
+                        The applicant did not attach an elevator video pitch with their application.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : activeTab === 'evaluations' ? (
+            <div className="p-6">
+              <TeamEvaluationsPanel
+                applicationId={applicationId}
+                initialSummary={dossier?.team_evaluations_summary}
+                onSummaryChange={(updatedSummary) => {
+                  setDossier((prev) => ({
+                    ...prev,
+                    team_evaluations_summary: updatedSummary,
+                  }));
+                }}
+              />
+            </div>
           ) : null}
         </div>
 
@@ -921,112 +2006,163 @@ export default function ApplicantDossierModal({
             <Button
               variant="primary"
               size="sm"
-              onClick={() => setDecisionType('SCHEDULE_INTERVIEW')}
+              onClick={() => {
+                if (isBlindMode) {
+                  setShowRevealPrompt(true);
+                } else {
+                  setDecisionType('SCHEDULE_INTERVIEW');
+                }
+              }}
               className="text-xs bg-purple-600 hover:bg-purple-700 font-bold text-white flex items-center gap-1.5"
             >
               <Calendar className="w-3.5 h-3.5" />
               Schedule Formal Interview
             </Button>
+
+            {/* 1-Click AI Offer Letter & Contract Generator */}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowOfferModal(true)}
+              className="text-xs bg-indigo-600 hover:bg-indigo-700 font-bold text-white flex items-center gap-1.5 shadow-sm"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              {dossier?.active_offer_letter?.status === 'ACCEPTED'
+                ? 'View Accepted Contract'
+                : dossier?.active_offer_letter
+                ? 'View / Edit Offer Letter'
+                : '1-Click AI Offer Letter'}
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Decision Sub-Modal: SCHEDULE FORMAL INTERVIEW (WITH EMAIL) */}
-      {decisionType === 'SCHEDULE_INTERVIEW' && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/70">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h4 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-purple-600" />
-                Schedule Formal Interview
-              </h4>
-              <button
-                onClick={() => setDecisionType(null)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
+      {/* Stage Transition Guard: Reveal Identity Prompt */}
+      {showRevealPrompt && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-purple-200 dark:border-purple-900 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Advance to Interview Phase
+                </h4>
+                <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider">
+                  Stage Transition Guard
+                </span>
+              </div>
             </div>
 
-            <p className="text-xs text-slate-500">
-              Schedule formal interview for <strong>{candidate?.full_name}</strong>. A formal calendar invitation email will be dispatched to <strong>{candidate?.email}</strong>.
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Candidate advanced to interview phase. Reveal candidate identity for direct scheduling?
             </p>
 
-            <div className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Date *
-                  </label>
-                  <input
-                    type="date"
-                    value={interviewDate}
-                    onChange={(e) => setInterviewDate(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Time *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 11:00 AM EST"
-                    value={interviewTime}
-                    onChange={(e) => setInterviewTime(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Google Meet / Venue Link *
-                </label>
-                <input
-                  type="text"
-                  placeholder="https://meet.google.com/xyz-abc"
-                  value={meetingLink}
-                  onChange={(e) => setMeetingLink(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Preparation Note / Agenda (Optional)
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="e.g. Please be prepared to discuss your system design and experience with scalable databases."
-                  value={recruiterNote}
-                  onChange={(e) => setRecruiterNote(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
+            <div className="p-3 bg-purple-50 dark:bg-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-800 text-[11px] text-purple-900 dark:text-purple-200 space-y-1">
+              <p>• <strong>Reveal Identity:</strong> Unmasks verified candidate full name and direct email address so calendar invitations and video links are dispatched accurately.</p>
+              <p>• <strong>Keep Anonymized:</strong> Keeps anonymous identifier active in the candidate dossier.</p>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2">
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setDecisionType(null)}
-                disabled={submittingDecision}
+                onClick={() => {
+                  setShowRevealPrompt(false);
+                  setDecisionType('SCHEDULE_INTERVIEW');
+                }}
+                className="w-full sm:w-auto text-xs"
               >
-                Cancel
+                Keep Anonymized
               </Button>
               <Button
                 variant="primary"
                 size="sm"
-                onClick={handleScheduleFormalInterview}
-                disabled={submittingDecision}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold"
+                onClick={() => {
+                  setShowRevealPrompt(false);
+                  setIsBlindMode(false);
+                  loadDossier(false);
+                  setDecisionType('SCHEDULE_INTERVIEW');
+                }}
+                className="w-full sm:w-auto text-xs bg-purple-600 hover:bg-purple-700 text-white font-bold"
               >
-                {submittingDecision ? 'Dispatching Email...' : 'Send Invitation & Schedule'}
+                Reveal Identity & Schedule
               </Button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Decision Sub-Modal: SCHEDULE FORMAL INTERVIEW (WITH EMAIL) */}
+      {decisionType === 'SCHEDULE_INTERVIEW' && (
+        <ScheduleInterviewModal
+          isOpen={true}
+          onClose={() => setDecisionType(null)}
+          candidate={{
+            ...candidate,
+            candidate_id: candidate?.id,
+            candidate_name: candidate?.full_name,
+            candidate_email: candidate?.email,
+            job_id: job?.id,
+            job_title: job?.title,
+            company_name: job?.company_name,
+            application_id: applicationId,
+          }}
+          onScheduled={(scheduled) => {
+            setDossier((prev) => ({
+              ...prev,
+              application: {
+                ...prev.application,
+                status: 'INTERVIEW',
+                interview_date: scheduled.interview_date,
+                interview_time: scheduled.interview_time,
+                meeting_link: scheduled.meeting_link,
+              },
+            }));
+            if (onDecisionMade) {
+              onDecisionMade({
+                ...dossier.application,
+                status: 'INTERVIEW',
+                interview_date: scheduled.interview_date,
+                interview_time: scheduled.interview_time,
+                meeting_link: scheduled.meeting_link,
+              });
+            }
+            setDecisionType(null);
+          }}
+        />
+      )}
+
+      {/* 1-Click AI Offer Letter & Employment Contract Generator Modal */}
+      {showOfferModal && (
+        <OfferLetterModal
+          isOpen={true}
+          onClose={() => setShowOfferModal(false)}
+          application={{
+            id: applicationId,
+            application_id: applicationId,
+            expected_salary: app?.expected_salary,
+            candidate_name: candidate?.full_name,
+            job_title: job?.title,
+            company_name: job?.company_name,
+          }}
+          candidateName={candidate?.full_name}
+          candidateEmail={candidate?.email}
+          jobTitle={job?.title}
+          companyName={job?.company_name}
+          expectedSalary={app?.expected_salary}
+          onOfferSent={(updatedOffer) => {
+            setShowOfferModal(false);
+            loadDossier(isBlindMode);
+            if (onDecisionMade) {
+              onDecisionMade({
+                ...dossier.application,
+                status: 'OFFER_EXTENDED',
+              });
+            }
+          }}
+        />
       )}
 
       {/* Decision Sub-Modal: REJECT */}

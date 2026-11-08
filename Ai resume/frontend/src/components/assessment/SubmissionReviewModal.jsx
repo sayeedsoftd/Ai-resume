@@ -106,8 +106,46 @@ export default function SubmissionReviewModal({ isOpen, onClose, submissionId })
                       {data.written_score} / 50.0 pts
                     </span>
                   </div>
+                  {data.viva_score != null && (
+                    <div className="px-3 py-1.5 rounded-xl bg-white border border-purple-200 text-xs shadow-2xs">
+                      <span className="text-purple-600 text-[10px] block font-medium">Oral Viva:</span>
+                      <span className="font-bold text-purple-700">
+                        {Math.round(data.viva_score)}%
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Oral Viva Review Card */}
+              {(data.viva_audio_url || data.viva_transcription) && (
+                <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-purple-900">
+                      🎙️ Oral Technical Viva Screening
+                    </span>
+                    {data.viva_score != null && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-black bg-purple-100 text-purple-800 border border-purple-300">
+                        Score: {Math.round(data.viva_score)}%
+                      </span>
+                    )}
+                  </div>
+
+                  {data.viva_audio_url && (
+                    <audio
+                      src={data.viva_audio_url.startsWith('http') ? data.viva_audio_url : `http://127.0.0.1:8000${data.viva_audio_url}`}
+                      controls
+                      className="w-full h-8"
+                    />
+                  )}
+
+                  {data.viva_transcription && (
+                    <div className="p-3 bg-white rounded-xl border border-purple-100 text-xs italic text-slate-700">
+                      "{data.viva_transcription}"
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Written Questions Rubric Feedback */}
               {writtenFeedback.length > 0 && (

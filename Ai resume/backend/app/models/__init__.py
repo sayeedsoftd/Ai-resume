@@ -17,12 +17,17 @@ from app.models.resume import Resume
 from app.models.job import Job
 from app.models.application import JobApplication
 from app.models.notification import Notification
+from app.models.candidate_message import CandidateMessage
+from app.models.interview import Interview
+from app.models.verified_badge import VerifiedBadge
 from app.models.assessment import JobAssessment, CandidateTestSubmission
 from app.models.subscription import (
     SubscriptionPlan,
     SystemPaymentSettings,
     PaymentTransaction,
 )
+from app.models.offer_letter import OfferLetter
+from app.models.recruiter_note import CandidateEvaluationNote, RecommendationType
 
 __all__ = [
     "Base",
@@ -42,9 +47,15 @@ __all__ = [
     "Job",
     "JobApplication",
     "Notification",
+    "CandidateMessage",
+    "Interview",
+    "VerifiedBadge",
     "JobAssessment",
     "CandidateTestSubmission",
     "SubscriptionPlan",
     "SystemPaymentSettings",
     "PaymentTransaction",
+    "OfferLetter",
+    "CandidateEvaluationNote",
+    "RecommendationType",
 ]

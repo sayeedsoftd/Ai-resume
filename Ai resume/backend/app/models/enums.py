@@ -51,8 +51,10 @@ class JobApplicationStatus(str, enum.Enum):
     STAGE2_INVITED = "STAGE2_INVITED"     # Invited to take Recruiter Stage-2 manual test
     STAGE2_SUBMITTED = "STAGE2_SUBMITTED" # Candidate submitted Stage-2 test, under review
     INTERVIEW = "INTERVIEW"               # Formal interview scheduled
+    OFFER_EXTENDED = "OFFER_EXTENDED"     # Formal Offer Letter extended to candidate
     REJECTED = "REJECTED"                 # Rejected
     ACCEPTED = "ACCEPTED"                 # Offer Accepted
+    DECLINED = "DECLINED"                 # Offer Declined by candidate
     JOB_CLOSED = "JOB_CLOSED"             # Job Closed by Recruiter
 
 

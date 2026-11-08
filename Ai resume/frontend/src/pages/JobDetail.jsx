@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { jobService } from '../services/jobService';
 import { resumeService } from '../services/resumeService';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,7 @@ import MatchScoreCard from '../components/dashboard/MatchScoreCard';
 import ScreeningTestModal from '../components/assessment/ScreeningTestModal';
 import Stage2AssessmentModal from '../components/assessment/Stage2AssessmentModal';
 import SubmissionReviewModal from '../components/assessment/SubmissionReviewModal';
+import ApplicationEligibilityModal from '../components/candidate/ApplicationEligibilityModal';
 import ErrorBoundary from '../components/ui/ErrorBoundary';
 import {
   MapPin,
@@ -23,6 +24,9 @@ import {
   Clock,
   HelpCircle,
   FileCheck,
+  Layers,
+  Laptop,
+  Building2,
 } from 'lucide-react';
 
 const JobDetail = () => {
@@ -39,10 +43,13 @@ const JobDetail = () => {
   const [applicationData, setApplicationData] = useState(null);
   const [msg, setMsg] = useState('');
 
-  // Assessment Modals State
+  // Assessment & Eligibility Modals State
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isStage2ModalOpen, setIsStage2ModalOpen] = useState(false);
+  const [isEligibilityModalOpen, setIsEligibilityModalOpen] = useState(false);
+  const [pendingActionType, setPendingActionType] = useState('screening'); // 'screening' | 'apply'
+  const [expectedSalary, setExpectedSalary] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -92,22 +99,39 @@ const JobDetail = () => {
     }
   };
 
-  const handleApply = async () => {
-    if (!selectedResumeId) {
-      alert('Please select a resume to apply with.');
-      return;
-    }
-    setApplying(true);
-    setMsg('');
-    try {
-      const res = await jobService.applyToJob(job.id, selectedResumeId);
-      setApplied(true);
-      setApplicationData(res);
-      setMsg('Application registered! Please complete the screening test below to finalize your ranking.');
-    } catch (err) {
-      setMsg(err.response?.data?.detail || 'Failed to submit application.');
-    } finally {
-      setApplying(false);
+  const handleStartScreeningClick = () => {
+    setPendingActionType('screening');
+    setIsEligibilityModalOpen(true);
+  };
+
+  const handleFastTrackApplyClick = () => {
+    setPendingActionType('apply');
+    setIsEligibilityModalOpen(true);
+  };
+
+  const handleEligibilityConfirm = async (salary) => {
+    setExpectedSalary(salary);
+    setIsEligibilityModalOpen(false);
+
+    if (pendingActionType === 'screening') {
+      setIsTestModalOpen(true);
+    } else {
+      if (!selectedResumeId) {
+        alert('Please select a resume to apply with.');
+        return;
+      }
+      setApplying(true);
+      setMsg('');
+      try {
+        const res = await jobService.applyToJob(job.id, selectedResumeId, salary);
+        setApplied(true);
+        setApplicationData(res);
+        setMsg('Application registered with your expected salary! Please complete the screening test below to finalize your ranking.');
+      } catch (err) {
+        setMsg(err.response?.data?.detail || 'Failed to submit application.');
+      } finally {
+        setApplying(false);
+      }
     }
   };
 
@@ -191,9 +215,13 @@ const JobDetail = () => {
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+              <Link
+                to={`/company/${job.posted_by_user_id || encodeURIComponent(job.company_name)}`}
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider hover:underline inline-block"
+                title="View Company Profile & Employer Branding"
+              >
                 {job.company_name}
-              </span>
+              </Link>
               <h1 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{job.title}</h1>
             </div>
             <Badge variant="primary" size="md">
@@ -201,15 +229,59 @@ const JobDetail = () => {
             </Badge>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <span className="flex items-center gap-1">
-              <MapPin className="w-4 h-4 text-slate-400" /> {job.location || 'Remote'}
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            {/* Workplace Model Badge */}
+            <span
+              className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1 ${
+                job.workplace_type === 'REMOTE'
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
+                  : job.workplace_type === 'HYBRID'
+                  ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 border border-sky-300 dark:border-sky-700'
+                  : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700'
+              }`}
+            >
+              {job.workplace_type === 'REMOTE' ? (
+                <Laptop className="w-3.5 h-3.5" />
+              ) : job.workplace_type === 'HYBRID' ? (
+                <Building2 className="w-3.5 h-3.5" />
+              ) : (
+                <MapPin className="w-3.5 h-3.5" />
+              )}
+              {job.workplace_type === 'REMOTE'
+                ? 'Remote'
+                : job.workplace_type === 'HYBRID'
+                ? 'Hybrid'
+                : 'On-site'}
             </span>
-            <span className="flex items-center gap-1">
-              <DollarSign className="w-4 h-4 text-slate-400" /> {job.salary_range || 'Competitive'}
+
+            {/* Category */}
+            {job.category && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                {job.category}
+              </span>
+            )}
+
+            {/* Salary */}
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+              {job.is_salary_negotiable && !job.min_salary
+                ? 'Negotiable'
+                : job.min_salary && job.max_salary
+                ? `৳${Number(job.min_salary).toLocaleString()} - ৳${Number(job.max_salary).toLocaleString()}`
+                : job.salary_range || 'Negotiable'}
             </span>
-            <span className="flex items-center gap-1">
-              <Briefcase className="w-4 h-4 text-slate-400" /> {job.experience_level}
+
+            {/* Experience */}
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+              <Award className="w-3.5 h-3.5 text-amber-500" />
+              {job.experience_years_required > 0
+                ? `${job.experience_years_required}+ Yrs Experience`
+                : 'Fresher / 0 Yrs Exp'}
+            </span>
+
+            <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 ml-auto">
+              <MapPin className="w-3.5 h-3.5 text-slate-400" /> {job.location || 'Remote'}
             </span>
           </div>
         </div>
@@ -320,7 +392,7 @@ const JobDetail = () => {
                         ) : (
                           <Button
                             variant="primary"
-                            onClick={() => setIsTestModalOpen(true)}
+                            onClick={handleStartScreeningClick}
                             className="w-full text-xs font-bold flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-sm"
                           >
                             <Sparkles className="w-4 h-4" />
@@ -391,7 +463,7 @@ const JobDetail = () => {
                       {/* Fast-Track Apply Button */}
                       {!applied && (
                         <Button
-                          onClick={handleApply}
+                          onClick={handleFastTrackApplyClick}
                           disabled={applying}
                           variant="secondary"
                           className="w-full text-xs"
@@ -449,7 +521,19 @@ const JobDetail = () => {
           jobTitle={job.title}
           companyName={job.company_name}
           resumeId={selectedResumeId}
+          expectedSalary={expectedSalary}
           onSuccess={handleAssessmentComplete}
+        />
+
+        {/* Application Eligibility Gatekeeper & Salary Modal */}
+        <ApplicationEligibilityModal
+          isOpen={isEligibilityModalOpen}
+          onClose={() => setIsEligibilityModalOpen(false)}
+          job={job}
+          resume={resumes.find((r) => String(r.id) === String(selectedResumeId)) || resumes[0]}
+          actionType={pendingActionType}
+          onConfirm={handleEligibilityConfirm}
+          isSubmitting={applying}
         />
 
         {/* Submission Review Modal */}

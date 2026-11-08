@@ -16,12 +16,15 @@ from app.schemas.resume import (
     ATSScoreResponse,
     AnalyzeAgainstJobRequest,
     ResumeBuilderSaveRequest,
+    ResumeGapAnalysisRequest,
+    ResumeGapAnalysisResponse,
 )
 from app.services.extractor import TextExtractorService
 from app.services.parser import ResumeParserService
 from app.services.matcher import JobMatchService
 from app.services.job_matcher import background_match_resume_task
 from app.services.gemini_service import GeminiService
+from app.services.gap_analyzer import ResumeGapAnalyzer
 from app.utils.constants import ALLOWED_RESUME_EXTENSIONS
 from app.utils.file_helpers import save_uploaded_file
 from app.utils.logger import logger
@@ -335,6 +338,105 @@ def analyze_resume_against_job(
         learning_recommendations=ai_result.get("learning_recommendations", []),
         summary_feedback=ai_result.get("summary_feedback"),
     )
+
+
+@router.post("/analyze-gap", response_model=ResumeGapAnalysisResponse)
+@router.post("/gap-analyzer", response_model=ResumeGapAnalysisResponse)
+def analyze_resume_gap(
+    request: ResumeGapAnalysisRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Real-Time AI Resume Gap Analyzer & Optimization Recommender.
+    Compares candidate resume against a specific Job circular or custom Job Description text.
+    Identifies hard & soft skill voids, experience misalignment, actionable project tweaks,
+    and returns before-and-after bullet rewrites with projected ATS score boost.
+    """
+    # 1. Resolve Candidate Resume
+    resume = None
+    resume_name = "Custom Resume Text"
+    parsed_profile = {}
+    resume_text = request.resume_text or ""
+
+    if request.resume_id:
+        resume = (
+            db.query(Resume)
+            .filter(Resume.id == request.resume_id, Resume.user_id == current_user.id)
+            .first()
+        )
+    if not resume and not resume_text:
+        resume = (
+            db.query(Resume)
+            .filter(Resume.user_id == current_user.id, Resume.is_primary == True)
+            .order_by(Resume.created_at.desc())
+            .first()
+        ) or (
+            db.query(Resume)
+            .filter(Resume.user_id == current_user.id)
+            .order_by(Resume.created_at.desc())
+            .first()
+        )
+
+    if resume:
+        parsed_profile = resume.parsed_data or {}
+        resume_text = resume.extracted_text or resume_text
+        resume_name = f"Resume v{resume.version} ({Path(resume.file_path).name})" if resume.file_path else f"Resume #{resume.id}"
+    elif not resume_text:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No resume found. Please upload a resume or provide resume text to analyze.",
+        )
+
+    # 2. Resolve Target Job Requirements
+    target_title = "Target Position"
+    target_company = "Hiring Organization"
+    target_skills = request.required_skills or []
+    target_jd = request.job_description_text or ""
+    min_exp_years = 2.0
+
+    if request.job_id:
+        job = db.query(Job).filter(Job.id == request.job_id).first()
+        if not job:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target job requisition not found.")
+        target_title = job.title
+        target_company = job.company_name or target_company
+        target_skills = job.required_skills or target_skills
+        target_jd = job.description or target_jd
+        exp_val = job.experience_level.value if hasattr(job.experience_level, "value") else str(job.experience_level)
+        exp_map = {"ENTRY": 1.0, "MID": 3.0, "SENIOR": 5.0, "LEAD": 8.0}
+        min_exp_years = exp_map.get(str(exp_val).upper(), 2.0)
+
+    if not target_skills and not target_jd:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide either a job_id or job_description_text to analyze gaps against.",
+        )
+
+    # 3. Execute Real-Time AI Gap Analysis
+    result = ResumeGapAnalyzer.analyze_resume_gap(
+        candidate_profile=parsed_profile,
+        resume_text=resume_text,
+        job_title=target_title,
+        job_description=target_jd,
+        required_skills=target_skills,
+        min_experience_years=min_exp_years,
+    )
+
+    return ResumeGapAnalysisResponse(
+        match_score=result["match_score"],
+        missing_hard_skills=result["missing_hard_skills"],
+        missing_soft_skills=result["missing_soft_skills"],
+        experience_gap=result["experience_gap"],
+        project_recommendations=result["project_recommendations"],
+        bullet_point_rewrites=result["bullet_point_rewrites"],
+        projected_score_boost=result["projected_score_boost"],
+        matched_skills=result.get("matched_skills", []),
+        target_job_title=target_title,
+        target_company=target_company,
+        resume_name=resume_name,
+    )
+
 
 
 

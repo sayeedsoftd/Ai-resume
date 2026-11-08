@@ -44,5 +44,10 @@ export const resumeService = {
     const response = await api.post('/resumes/analyze-against-job', payload);
     return response.data;
   },
+
+  async analyzeGap(payload) {
+    const response = await api.post('/resumes/analyze-gap', payload);
+    return response.data;
+  },
 };
 

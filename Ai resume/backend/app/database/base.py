@@ -12,3 +12,5 @@ from app.models.job import Job  # noqa: E402, F401
 from app.models.application import JobApplication  # noqa: E402, F401
 from app.models.notification import Notification  # noqa: E402, F401
 from app.models.assessment import JobAssessment, CandidateTestSubmission  # noqa: E402, F401
+from app.models.offer_letter import OfferLetter  # noqa: E402, F401
+from app.models.recruiter_note import CandidateEvaluationNote  # noqa: E402, F401

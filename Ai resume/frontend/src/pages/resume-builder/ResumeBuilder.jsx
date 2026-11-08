@@ -300,7 +300,7 @@ export default function ResumeBuilder() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-slate-100 dark:bg-slate-950">
+    <div className="flex-1 h-full min-h-[calc(100vh-10rem)] flex flex-col overflow-hidden bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
       {/* Notifications / Alerts */}
       {saveSuccessMessage && (
         <div className="bg-emerald-600 text-white text-xs py-2 px-4 flex items-center justify-between shadow-md z-30 animate-fade-in">
@@ -330,7 +330,7 @@ export default function ResumeBuilder() {
       )}
 
       {/* Split-Screen Main Container */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-[700px]">
         {/* ================= LEFT PANE: 50% Multi-Step Form Wizard ================= */}
         <div className="w-full lg:w-1/2 h-full flex flex-col overflow-hidden bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
           <ResumeFormWizard

@@ -30,12 +30,18 @@ settings.resume_upload_dir
 settings.kyc_upload_dir
 settings.avatar_upload_dir
 settings.photos_upload_dir
+settings.video_pitches_upload_dir
 
 # Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory=str(settings.UPLOAD_DIR)), name="uploads")
 
 # Include API v1 Router
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Ensure Offer Letters router is directly accessible on standard and direct prefixes
+from app.api.v1.endpoints import offer_letters
+app.include_router(offer_letters.router, prefix=f"{settings.API_V1_STR}/offer-letters", tags=["offer-letters"])
+app.include_router(offer_letters.router, prefix="/offer-letters", tags=["offer-letters-direct"])
 
 
 @app.on_event("startup")

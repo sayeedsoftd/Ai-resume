@@ -17,18 +17,58 @@ import {
   RefreshCw,
   ArrowRight,
   Upload,
+  Laptop,
+  Building2,
+  Layers,
+  Award,
+  RotateCcw,
 } from 'lucide-react';
 import { jobService } from '../../services/jobService';
+import { resumeService } from '../../services/resumeService';
+import ApplicationEligibilityModal from '../../components/candidate/ApplicationEligibilityModal';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import ErrorBoundary from '../../components/ui/ErrorBoundary';
 import { useNotifications } from '../../context/NotificationContext';
+
+const JOB_CATEGORIES = [
+  'All Categories',
+  'Software Engineering',
+  'AI / Machine Learning',
+  'Data Science & Analytics',
+  'UI/UX & Product Design',
+  'Quality Assurance & Testing',
+  'DevOps & Cloud Engineering',
+  'Mobile App Development',
+  'Cybersecurity & Networking',
+  'Product & Project Management',
+  'Database Administration',
+  'IT & Tech Support',
+];
+
+const WORKPLACE_OPTIONS = [
+  { id: 'ALL', label: 'All Models' },
+  { id: 'REMOTE', label: 'Remote', icon: Laptop },
+  { id: 'HYBRID', label: 'Hybrid', icon: Building2 },
+  { id: 'ON_SITE', label: 'On-site', icon: MapPin },
+];
+
+const SALARY_PRESETS = [
+  { label: 'Any Salary', value: 'ALL' },
+  { label: '৳25k+', value: '25000' },
+  { label: '৳40k+', value: '40000' },
+  { label: '৳60k+', value: '60000' },
+  { label: '৳100k+', value: '100000' },
+];
 
 export default function JobMatchFinder() {
   const [matchedJobs, setMatchedJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [selectedWorkplace, setSelectedWorkplace] = useState('ALL');
+  const [selectedSalaryPreset, setSelectedSalaryPreset] = useState('ALL');
   const [savedJobs, setSavedJobs] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('saved_jobs_ids') || '[]');
@@ -38,6 +78,8 @@ export default function JobMatchFinder() {
   });
   const [applyingJobId, setApplyingJobId] = useState(null);
   const [appliedJobIds, setAppliedJobIds] = useState([]);
+  const [selectedJobForEligibility, setSelectedJobForEligibility] = useState(null);
+  const [primaryResume, setPrimaryResume] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const { triggerToast } = useNotifications();
 
@@ -49,9 +91,18 @@ export default function JobMatchFinder() {
     setLoading(true);
     setErrorMsg('');
     try {
-      const data = await jobService.getMatchedJobs();
-      if (Array.isArray(data)) {
-        setMatchedJobs(data);
+      const [matchesRes, resumesRes] = await Promise.allSettled([
+        jobService.getMatchedJobs(),
+        resumeService.getResumes(),
+      ]);
+
+      if (resumesRes.status === 'fulfilled' && Array.isArray(resumesRes.value)) {
+        const prim = resumesRes.value.find((r) => r.is_primary) || resumesRes.value[0];
+        setPrimaryResume(prim);
+      }
+
+      if (matchesRes.status === 'fulfilled' && Array.isArray(matchesRes.value)) {
+        setMatchedJobs(matchesRes.value);
       } else {
         setMatchedJobs([]);
       }
@@ -102,16 +153,28 @@ export default function JobMatchFinder() {
     });
   };
 
-  const handleOneClickApply = async (jobId, jobTitle) => {
+  const handleOpenApplyCheck = (job) => {
+    setSelectedJobForEligibility(job);
+  };
+
+  const handleEligibilityConfirm = async (salary) => {
+    if (!selectedJobForEligibility) return;
+    const j = selectedJobForEligibility;
+    setSelectedJobForEligibility(null);
+    handleOneClickApply(j.id, j.title, salary);
+  };
+
+  const handleOneClickApply = async (jobId, jobTitle, expectedSalary = null) => {
     setApplyingJobId(jobId);
     try {
-      const res = await jobService.oneClickApply(jobId);
+      const payload = expectedSalary ? { expected_salary: expectedSalary } : {};
+      const res = await jobService.oneClickApply(jobId, payload);
       setAppliedJobIds((prev) => [...(Array.isArray(prev) ? prev : []), jobId]);
       if (triggerToast) {
         triggerToast({
           id: Date.now(),
           title: 'Application Submitted!',
-          message: `Your 1-click application for '${jobTitle}' was successfully received (ATS Match: ${res?.match_score || 80}%).`,
+          message: `Your 1-click application for '${jobTitle}' was successfully received (Expected: ৳${expectedSalary ? Number(expectedSalary).toLocaleString() : 'Negotiable'}).`,
           type: 'JOB',
         });
       }
@@ -174,6 +237,13 @@ export default function JobMatchFinder() {
       ? innerJob.required_skills.slice(3)
       : [];
 
+    const category = item.category || innerJob.category || 'Software Engineering';
+    const workplace_type = (item.workplace_type || innerJob.workplace_type || 'ON_SITE').toUpperCase();
+    const min_salary = item.min_salary !== undefined ? item.min_salary : innerJob.min_salary;
+    const max_salary = item.max_salary !== undefined ? item.max_salary : innerJob.max_salary;
+    const is_salary_negotiable = Boolean(item.is_salary_negotiable ?? innerJob.is_salary_negotiable);
+    const experience_years_required = item.experience_years_required ?? innerJob.experience_years_required ?? 0;
+
     return {
       id,
       title,
@@ -181,6 +251,12 @@ export default function JobMatchFinder() {
       location,
       job_type,
       salary_range,
+      category,
+      workplace_type,
+      min_salary,
+      max_salary,
+      is_salary_negotiable,
+      experience_years_required,
       match_score,
       matched_skills,
       missing_skills,
@@ -191,15 +267,41 @@ export default function JobMatchFinder() {
     .map(normalizeJobItem)
     .filter(Boolean);
 
-  // Filter based on search query
+  // Filter based on search query, category, workplace type, and salary
   const filteredJobs = normalizedJobs.filter((j) => {
     const q = (searchQuery || '').trim().toLowerCase();
-    if (!q) return true;
-    return (
-      (j.title || '').toLowerCase().includes(q) ||
-      (j.company_name || '').toLowerCase().includes(q) ||
-      (j.location || '').toLowerCase().includes(q)
-    );
+    if (q) {
+      const matchQ =
+        (j.title || '').toLowerCase().includes(q) ||
+        (j.company_name || '').toLowerCase().includes(q) ||
+        (j.location || '').toLowerCase().includes(q) ||
+        (j.category || '').toLowerCase().includes(q);
+      if (!matchQ) return false;
+    }
+
+    if (selectedCategory && selectedCategory !== 'All Categories') {
+      if ((j.category || '').toLowerCase() !== selectedCategory.toLowerCase()) {
+        return false;
+      }
+    }
+
+    if (selectedWorkplace && selectedWorkplace !== 'ALL') {
+      if (j.workplace_type !== selectedWorkplace) {
+        return false;
+      }
+    }
+
+    if (selectedSalaryPreset && selectedSalaryPreset !== 'ALL') {
+      const targetMin = parseFloat(selectedSalaryPreset);
+      const jMin = j.min_salary !== null && j.min_salary !== undefined ? Number(j.min_salary) : null;
+      const jMax = j.max_salary !== null && j.max_salary !== undefined ? Number(j.max_salary) : null;
+      if (!j.is_salary_negotiable) {
+        if (jMax !== null && jMax < targetMin) return false;
+        if (jMin !== null && jMin < targetMin && jMax === null) return false;
+      }
+    }
+
+    return true;
   });
 
   return (
@@ -265,6 +367,96 @@ export default function JobMatchFinder() {
                 <ListIcon className="w-4 h-4" />
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* BDjobs Filter Strip */}
+        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Category Dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                <Layers className="w-3.5 h-3.5 text-indigo-500" /> Category:
+              </span>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                {JOB_CATEGORIES.map((cat, idx) => (
+                  <option key={idx} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Workplace Pills */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                <Laptop className="w-3.5 h-3.5 text-indigo-500" /> Workplace:
+              </span>
+              {WORKPLACE_OPTIONS.map((wp) => {
+                const Icon = wp.icon;
+                const active = selectedWorkplace === wp.id;
+                return (
+                  <button
+                    key={wp.id}
+                    type="button"
+                    onClick={() => setSelectedWorkplace(wp.id)}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                      active
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {Icon && <Icon className="w-3 h-3" />}
+                    {wp.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Salary Presets */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> Salary:
+              </span>
+              {SALARY_PRESETS.map((preset, idx) => {
+                const active = selectedSalaryPreset === preset.value;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setSelectedSalaryPreset(preset.value)}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all ${
+                      active
+                        ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Reset Filters button */}
+            {(selectedCategory !== 'All Categories' || selectedWorkplace !== 'ALL' || selectedSalaryPreset !== 'ALL' || searchQuery) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategory('All Categories');
+                  setSelectedWorkplace('ALL');
+                  setSelectedSalaryPreset('ALL');
+                  setSearchQuery('');
+                }}
+                className="py-1 px-2.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl hover:bg-rose-100 flex items-center gap-1"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset
+              </button>
+            )}
           </div>
         </div>
 
@@ -357,28 +549,55 @@ export default function JobMatchFinder() {
                     </Link>
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 mt-1">
                       <Building className="w-3.5 h-3.5 text-slate-400" />
-                      {j.company_name}
+                      <Link
+                        to={`/company/${j.posted_by_user_id || encodeURIComponent(j.company_name)}`}
+                        className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline"
+                        title="View verified company profile and openings"
+                      >
+                        {j.company_name}
+                      </Link>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400 mt-3">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5" />
-                        {j.location || 'Remote'}
+                    {/* BDjobs Badges Row */}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${
+                          j.workplace_type === 'REMOTE'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
+                            : j.workplace_type === 'HYBRID'
+                            ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 border border-sky-300 dark:border-sky-700'
+                            : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700'
+                        }`}
+                      >
+                        {j.workplace_type === 'REMOTE' ? (
+                          <Laptop className="w-2.5 h-2.5" />
+                        ) : j.workplace_type === 'HYBRID' ? (
+                          <Building2 className="w-2.5 h-2.5" />
+                        ) : (
+                          <MapPin className="w-2.5 h-2.5" />
+                        )}
+                        {j.workplace_type === 'REMOTE' ? 'Remote' : j.workplace_type === 'HYBRID' ? 'Hybrid' : 'On-site'}
                       </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
-                        {j.job_type}
-                      </span>
-                      {j.salary_range && (
-                        <>
-                          <span>•</span>
-                          <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
-                            <DollarSign className="w-3.5 h-3.5" />
-                            {j.salary_range}
-                          </span>
-                        </>
+
+                      {j.category && (
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
+                          {j.category}
+                        </span>
                       )}
+
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                        <DollarSign className="w-2.5 h-2.5 text-emerald-500" />
+                        {j.is_salary_negotiable && !j.min_salary
+                          ? 'Negotiable'
+                          : j.min_salary && j.max_salary
+                          ? `৳${Number(j.min_salary).toLocaleString()} - ৳${Number(j.max_salary).toLocaleString()}`
+                          : j.salary_range || 'Negotiable'}
+                      </span>
+
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
+                        <Award className="w-2.5 h-2.5 text-amber-500" />
+                        {j.experience_years_required > 0 ? `${j.experience_years_required}+ Yrs Exp` : 'Fresher / 0 Yrs'}
+                      </span>
                     </div>
 
                     {/* Skills Section */}
@@ -442,7 +661,7 @@ export default function JobMatchFinder() {
                       <Button
                         variant="primary"
                         size="sm"
-                        onClick={() => handleOneClickApply(j.id, j.title)}
+                        onClick={() => handleOpenApplyCheck(j)}
                         disabled={isApplying}
                         className="w-full flex items-center justify-center gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 font-semibold"
                       >
@@ -484,18 +703,35 @@ export default function JobMatchFinder() {
                       {getScoreBadge(j.match_score)}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-400">
-                      <span className="font-semibold text-slate-900 dark:text-slate-200 flex items-center gap-1">
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+                      <span className="font-semibold text-slate-900 dark:text-slate-200 flex items-center gap-1 mr-1">
                         <Building className="w-3.5 h-3.5 text-slate-400" />
-                        {j.company_name}
+                        <Link
+                          to={`/company/${j.posted_by_user_id || encodeURIComponent(j.company_name)}`}
+                          className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline"
+                          title="View verified company profile and openings"
+                        >
+                          {j.company_name}
+                        </Link>
                       </span>
-                      <span>• {j.location || 'Remote'}</span>
-                      <span>• {j.job_type}</span>
-                      {j.salary_range && (
-                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                          • {j.salary_range}
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        {j.workplace_type === 'REMOTE' ? 'Remote' : j.workplace_type === 'HYBRID' ? 'Hybrid' : 'On-site'}
+                      </span>
+                      {j.category && (
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
+                          {j.category}
                         </span>
                       )}
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                        {j.is_salary_negotiable && !j.min_salary
+                          ? 'Negotiable'
+                          : j.min_salary && j.max_salary
+                          ? `৳${Number(j.min_salary).toLocaleString()} - ৳${Number(j.max_salary).toLocaleString()}`
+                          : j.salary_range || 'Negotiable'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                        {j.experience_years_required > 0 ? `${j.experience_years_required}+ Yrs Exp` : 'Fresher / 0 Yrs'}
+                      </span>
                     </div>
 
                     {/* Missing skills chip preview */}
@@ -551,7 +787,7 @@ export default function JobMatchFinder() {
                       <Button
                         variant="primary"
                         size="sm"
-                        onClick={() => handleOneClickApply(j.id, j.title)}
+                        onClick={() => handleOpenApplyCheck(j)}
                         disabled={isApplying}
                         className="flex items-center gap-1.5 text-xs font-semibold"
                       >
@@ -565,6 +801,17 @@ export default function JobMatchFinder() {
             })}
           </div>
         )}
+
+        {/* Application Eligibility Gatekeeper & Salary Modal */}
+        <ApplicationEligibilityModal
+          isOpen={Boolean(selectedJobForEligibility)}
+          onClose={() => setSelectedJobForEligibility(null)}
+          job={selectedJobForEligibility}
+          resume={primaryResume}
+          actionType="apply"
+          onConfirm={handleEligibilityConfirm}
+          isSubmitting={Boolean(applyingJobId)}
+        />
       </div>
     </ErrorBoundary>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
@@ -22,6 +23,7 @@ import {
   MapPin,
   Printer,
   Sparkles,
+  Building2,
 } from 'lucide-react';
 
 const Profile = () => {
@@ -207,6 +209,30 @@ const Profile = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
+      {/* Recruiter Quick Switcher Notice */}
+      {(user?.role === 'RECRUITER' || user?.role === 'SUBSCRIBER') && (
+        <div className="p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                Recruiter Organization Detected
+              </h4>
+              <p className="text-[11px] text-indigo-700 dark:text-indigo-300">
+                Looking to customize your public employer branding, upload your logo, and showcase live jobs?
+              </p>
+            </div>
+          </div>
+          <Link to="/recruiter/company-profile">
+            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs whitespace-nowrap font-bold">
+              Manage Company Profile
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

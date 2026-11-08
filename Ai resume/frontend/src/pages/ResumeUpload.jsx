@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { resumeService } from '../services/resumeService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -151,6 +152,35 @@ const ResumeUpload = () => {
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
           4-Stage Applicant Tracking System: File Ingestion &bull; Entity Categorization &bull; Job Criteria Alignment &bull; Composite Scoring & Shortlisting
         </p>
+      </div>
+
+      {/* AI RESUME GAP ANALYZER PROMO BANNER */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-900/90 via-slate-900 to-indigo-950 border border-emerald-500/30 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-400 flex items-center justify-center shrink-0">
+            <Target className="w-5 h-5 animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-bold text-white">
+                Real-Time AI Resume Gap Analyzer
+              </h3>
+              <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px]">
+                New Feature
+              </Badge>
+            </div>
+            <p className="text-xs text-slate-300 mt-1 leading-relaxed max-w-2xl">
+              Compare your resume against any target job circular using Gemini AI. Discover missing hard/soft skills, experience gaps, tailored project tweaks, and 1-click bullet point rewrites with projected ATS score boost.
+            </p>
+          </div>
+        </div>
+        <Link to="/dashboard?tab=gap-analyzer" className="shrink-0">
+          <Button className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs py-2.5 px-4 shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2">
+            <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+            Launch Gap Analyzer
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Button>
+        </Link>
       </div>
 
       {error && (

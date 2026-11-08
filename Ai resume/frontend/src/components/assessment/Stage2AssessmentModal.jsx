@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   X,
   CheckCircle2,
@@ -9,6 +10,10 @@ import {
   Send,
   FileText,
   Award,
+  ShieldAlert,
+  AlertTriangle,
+  Maximize2,
+  Lock,
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { jobService } from '../../services/jobService';
@@ -23,6 +28,7 @@ export default function Stage2AssessmentModal({
   passingScore = 70,
   onSubmitted,
 }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [assessmentData, setAssessmentData] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -31,6 +37,28 @@ export default function Stage2AssessmentModal({
   const [submitting, setSubmitting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null);
+
+  // Anti-Cheating & Proctoring State
+  const [proctoringStarted, setProctoringStarted] = useState(false);
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [proctoringViolations, setProctoringViolations] = useState([]);
+  const [proctoringModal, setProctoringModal] = useState(null);
+  const [isTerminated, setIsTerminated] = useState(false);
+  const [normalSubmitSuccessModal, setNormalSubmitSuccessModal] = useState(null);
+
+  // Proctoring Refs for listeners & submission
+  const answersRef = useRef({ mcq: {}, written: {} });
+  const violationsRef = useRef([]);
+  const tabSwitchCountRef = useRef(0);
+  const isTerminatedRef = useRef(false);
+  const lastViolationTimeRef = useRef(0);
+  const hasSubmittedRef = useRef(false);
+  const isManualSubmitting = useRef(false);
+  const proctoringCleanupRef = useRef(null);
+
+  useEffect(() => {
+    answersRef.current = { mcq: mcqAnswers, written: writtenAnswers };
+  }, [mcqAnswers, writtenAnswers]);
 
   useEffect(() => {
     if (isOpen && jobId) {
@@ -42,6 +70,20 @@ export default function Stage2AssessmentModal({
     setLoading(true);
     setErrorMsg('');
     setSubmissionResult(null);
+    setMcqAnswers({});
+    setWrittenAnswers({});
+    setTabSwitchCount(0);
+    setProctoringViolations([]);
+    setProctoringModal(null);
+    setIsTerminated(false);
+    setProctoringStarted(false);
+    setNormalSubmitSuccessModal(null);
+    tabSwitchCountRef.current = 0;
+    violationsRef.current = [];
+    isTerminatedRef.current = false;
+    lastViolationTimeRef.current = 0;
+    hasSubmittedRef.current = false;
+    isManualSubmitting.current = false;
     try {
       const data = await jobService.getStage2Assessment(jobId);
       setAssessmentData(data);
@@ -54,6 +96,134 @@ export default function Stage2AssessmentModal({
       setLoading(false);
     }
   };
+
+  const handleStartExam = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (e) {
+      console.warn('Fullscreen request bypassed or denied:', e);
+    }
+    setProctoringStarted(true);
+  };
+
+  const detachProctoringListeners = () => {
+    if (proctoringCleanupRef.current) {
+      proctoringCleanupRef.current();
+      proctoringCleanupRef.current = null;
+    }
+  };
+
+  // Anti-Cheating & Proctoring Event Listeners
+  useEffect(() => {
+    if (!isOpen || !assessmentData || isCompleted || !proctoringStarted || isTerminated) return;
+
+    const recordViolation = (eventType) => {
+      if (isTerminatedRef.current || hasSubmittedRef.current || isManualSubmitting.current) return;
+
+      const now = Date.now();
+      if (now - lastViolationTimeRef.current < 1500) return;
+      lastViolationTimeRef.current = now;
+
+      tabSwitchCountRef.current += 1;
+      const count = tabSwitchCountRef.current;
+      setTabSwitchCount(count);
+
+      const timeStr = new Date().toLocaleTimeString();
+      const desc =
+        eventType === 'fullscreen'
+          ? `Fullscreen exit at ${timeStr}`
+          : `Tab switch / focus loss #${count} at ${timeStr}`;
+
+      const item = { timestamp: timeStr, event: desc, count };
+      violationsRef.current = [...violationsRef.current, item];
+      setProctoringViolations([...violationsRef.current]);
+
+      if (count === 1) {
+        setProctoringModal({
+          title: 'Warning (1/2): Tab Switch Detected',
+          message:
+            'Warning (1/2): Tab switch / window minimization detected! Remaining attempts: 1 before automatic test termination.',
+          count: 1,
+          level: 'warning',
+        });
+      } else if (count === 2) {
+        setProctoringModal({
+          title: 'Final Warning (2/2): Tab Switch Detected',
+          message:
+            'Final Warning (2/2): Another violation will permanently auto-submit your exam.',
+          count: 2,
+          level: 'danger',
+        });
+      } else if (count >= 3) {
+        if (hasSubmittedRef.current) return;
+        hasSubmittedRef.current = true;
+        isTerminatedRef.current = true;
+        setIsTerminated(true);
+
+        cleanupListeners();
+
+        setProctoringModal({
+          title: 'Examination Terminated',
+          message:
+            'Examination Terminated: Excessive tab switching detected (>2 times). Submitting your assessment and proctoring logs to the recruiter...',
+          count: 3,
+          level: 'terminated',
+          completed: false,
+        });
+        handleSubmit('AUTO_PROCTOR_VIOLATION', count, violationsRef.current);
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        recordViolation('visibility');
+      }
+    };
+
+    const handleWindowBlur = () => {
+      recordViolation('blur');
+    };
+
+    const handleFullscreen = () => {
+      if (!document.fullscreenElement) {
+        recordViolation('fullscreen');
+      }
+    };
+
+    const handleKeyDown = (e) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ['c', 'v', 'u', 's', 'p', 'x', 'a'].includes(e.key.toLowerCase())
+      ) {
+        e.preventDefault();
+        return false;
+      }
+      if (e.key === 'F12') {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    const cleanupListeners = () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('blur', handleWindowBlur);
+      document.removeEventListener('fullscreenchange', handleFullscreen);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+    proctoringCleanupRef.current = cleanupListeners;
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('blur', handleWindowBlur);
+    document.addEventListener('fullscreenchange', handleFullscreen);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      cleanupListeners();
+      proctoringCleanupRef.current = null;
+    };
+  }, [isOpen, assessmentData, isCompleted, proctoringStarted, isTerminated]);
 
   if (!isOpen) return null;
 
@@ -86,28 +256,59 @@ export default function Stage2AssessmentModal({
     }));
   };
 
-  const handleSubmit = async () => {
-    const unansweredMCQs = mcqs.filter((q, idx) => {
-      const key = q.id !== undefined && q.id !== null ? String(q.id) : String(idx);
-      return !mcqAnswers[key];
-    });
-    const unansweredWritten = written.filter((w, idx) => {
-      const key = w.id !== undefined && w.id !== null ? String(w.id) : String(idx);
-      return !writtenAnswers[key] || writtenAnswers[key].trim().length < 5;
-    });
+  const handleSubmit = async (
+    reason = 'NORMAL',
+    customCount = null,
+    customViolations = null
+  ) => {
+    const isAutoViolation = reason === 'AUTO_PROCTOR_VIOLATION';
+    
+    // Set manual submitting flag immediately & detach event listeners before preparing payload
+    isManualSubmitting.current = true;
+    detachProctoringListeners();
 
-    if (unansweredMCQs.length > 0 || unansweredWritten.length > 0) {
-      const proceed = window.confirm(
-        `You have ${unansweredMCQs.length + unansweredWritten.length} unanswered or incomplete questions. Are you sure you want to submit?`
-      );
-      if (!proceed) return;
+    if (isAutoViolation) {
+      hasSubmittedRef.current = true;
+      isTerminatedRef.current = true;
+      setIsTerminated(true);
+    }
+
+    if (reason === 'NORMAL') {
+      const unansweredMCQs = mcqs.filter((q, idx) => {
+        const key = q.id !== undefined && q.id !== null ? String(q.id) : String(idx);
+        return !mcqAnswers[key];
+      });
+      const unansweredWritten = written.filter((w, idx) => {
+        const key = w.id !== undefined && w.id !== null ? String(w.id) : String(idx);
+        return !writtenAnswers[key] || writtenAnswers[key].trim().length < 5;
+      });
+
+      if (unansweredMCQs.length > 0 || unansweredWritten.length > 0) {
+        const proceed = window.confirm(
+          `You have ${unansweredMCQs.length + unansweredWritten.length} unanswered or incomplete questions. Are you sure you want to submit?`
+        );
+        if (!proceed) {
+          isManualSubmitting.current = false;
+          return;
+        }
+      }
     }
 
     setSubmitting(true);
+    const finalCount =
+      customCount !== null ? customCount : tabSwitchCountRef.current;
+    const finalViolations =
+      customViolations !== null ? customViolations : violationsRef.current;
+    const isSus = finalCount > 2 || isAutoViolation;
+
     try {
       const payload = {
-        mcq_answers: mcqAnswers,
-        written_answers: writtenAnswers,
+        mcq_answers: answersRef.current.mcq,
+        written_answers: answersRef.current.written,
+        tab_switch_count: finalCount,
+        is_suspicious: finalCount > 2 ? true : false,
+        proctoring_violations: finalViolations,
+        submission_reason: isAutoViolation ? 'AUTO_PROCTOR_VIOLATION' : 'NORMAL',
       };
       let res;
       if (applicationId) {
@@ -121,9 +322,47 @@ export default function Stage2AssessmentModal({
       if (onSubmitted) {
         onSubmitted(res);
       }
+      if (isAutoViolation || isSus) {
+        setProctoringModal({
+          title: 'Exam Terminated & Submitted',
+          message: 'Exam submitted with proctoring flag. Redirecting to dashboard...',
+          count: finalCount,
+          level: 'terminated',
+          completed: true,
+        });
+        setTimeout(() => {
+          onClose();
+          navigate('/dashboard');
+        }, 1500);
+      } else {
+        // Clean Normal Submission
+        setProctoringModal(null);
+        setNormalSubmitSuccessModal({
+          title: 'Exam Submitted Successfully!',
+          message: 'Your assessment has been recorded. Reviewing your scores...',
+        });
+        setTimeout(() => {
+          setNormalSubmitSuccessModal(null);
+        }, 1500);
+      }
     } catch (err) {
       console.error('Failed to submit Stage 2 assessment:', err);
-      alert(err.response?.data?.detail || 'Failed to submit assessment.');
+      if (isAutoViolation || isSus) {
+        setProctoringModal({
+          title: 'Exam Terminated & Submitted',
+          message: 'Exam submitted with proctoring flag. Redirecting to dashboard...',
+          count: finalCount,
+          level: 'terminated',
+          completed: true,
+        });
+        setTimeout(() => {
+          onClose();
+          navigate('/dashboard');
+        }, 1500);
+      } else {
+        setNormalSubmitSuccessModal(null);
+        alert(err.response?.data?.detail || 'Failed to submit assessment.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -148,16 +387,35 @@ export default function Stage2AssessmentModal({
             </p>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Proctoring Status Badge */}
+            {proctoringStarted && !isCompleted && (
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-bold border transition-colors ${
+                  tabSwitchCount === 0
+                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+                    : tabSwitchCount === 1
+                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border-amber-300 dark:border-amber-800 animate-pulse'
+                    : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-300 dark:border-rose-800 animate-pulse'
+                }`}
+                title="Tab switches count"
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>Switches: {tabSwitchCount}/2</span>
+              </div>
+            )}
+
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Live Marks Counter Banner */}
-        {!loading && !errorMsg && !isCompleted && (
+        {!loading && !errorMsg && !isCompleted && proctoringStarted && (
           <div className="px-5 sm:px-7 py-2.5 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 dark:from-purple-950/40 dark:via-indigo-950/30 dark:to-purple-950/40 border-b border-purple-200 dark:border-purple-800/80 flex flex-wrap items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2.5 flex-wrap">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -246,14 +504,100 @@ export default function Stage2AssessmentModal({
                 </div>
               </div>
 
+              {submissionResult?.is_suspicious && (
+                <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs font-semibold flex items-start gap-2.5 text-left">
+                  <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block font-bold">Proctoring Flag Recorded</strong>
+                    <span>
+                      {submissionResult?.tab_switch_count > 2 || submissionResult?.submission_reason === 'AUTO_PROCTOR_VIOLATION'
+                        ? `Assessment terminated or flagged due to excessive tab switching (${submissionResult?.tab_switch_count} violations recorded).`
+                        : 'Tab focus shifts were detected and logged for the hiring team.'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="pt-2">
                 <Button variant="primary" onClick={onClose} className="w-full font-bold">
                   Return to Job Details
                 </Button>
               </div>
             </div>
+          ) : !proctoringStarted ? (
+            /* =========================================================
+               PRE-EXAM PROCTORING ONBOARDING VIEW
+               ========================================================= */
+            <div className="py-8 px-4 max-w-xl mx-auto my-auto text-center space-y-6">
+              <div className="w-16 h-16 rounded-3xl bg-purple-100 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto shadow-md">
+                <ShieldAlert className="w-8 h-8" />
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-xs font-black uppercase tracking-widest text-purple-600 dark:text-purple-400">
+                  Anti-Cheating Monitored Assessment
+                </span>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                  Stage-2 Proctoring Guidelines
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                  Please review the exam security standards before launching full-screen examination mode:
+                </p>
+              </div>
+
+              <div className="text-left bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-750 rounded-2xl p-5 space-y-3.5 text-xs text-slate-700 dark:text-slate-300">
+                <div className="flex items-start gap-3">
+                  <Maximize2 className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-slate-900 dark:text-white font-bold block">1. Fullscreen Enforcement:</strong>
+                    Launching the exam requests full-screen mode. Leaving full-screen is monitored and logged.
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-slate-900 dark:text-white font-bold block">2. Tab Switching Limits (Max 2 Allowed):</strong>
+                    Switching browser tabs or minimizing the window logs a violation.
+                    <span className="block mt-0.5 text-amber-700 dark:text-amber-400 font-semibold">
+                      • 1st violation: Warning alert & remaining count
+                      <br />
+                      • 2nd violation: Final warning
+                      <br />
+                      • 3rd violation: Auto-termination & flagged as High Proctoring Risk
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Lock className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-slate-900 dark:text-white font-bold block">3. Copy/Paste Restrictions:</strong>
+                    Copying text, pasting external code, and developer shortcuts are strictly prohibited.
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                <Button variant="ghost" size="sm" onClick={onClose} className="w-full sm:w-auto text-xs">
+                  Cancel & Exit
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={handleStartExam}
+                  className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 font-bold text-xs px-8 py-3 flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                  I Acknowledge & Start Monitored Exam
+                </Button>
+              </div>
+            </div>
           ) : (
-            <div className="space-y-8">
+            <div
+              className="space-y-8 select-none"
+              onContextMenu={(e) => e.preventDefault()}
+              onCopy={(e) => e.preventDefault()}
+              onPaste={(e) => e.preventDefault()}
+            >
               {/* Instructions Callout */}
               <div className="p-4 rounded-2xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 text-xs text-purple-900 dark:text-purple-200 space-y-1">
                 <h4 className="font-bold flex items-center gap-1.5">
@@ -410,7 +754,7 @@ export default function Stage2AssessmentModal({
         </div>
 
         {/* Modal Footer */}
-        {!isCompleted && !loading && !errorMsg && (
+        {!isCompleted && !loading && !errorMsg && proctoringStarted && (
           <div className="p-4 sm:px-7 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
             <div className="text-xs text-slate-500">
               Answered:{' '}
@@ -430,7 +774,7 @@ export default function Stage2AssessmentModal({
               <Button
                 variant="primary"
                 size="sm"
-                onClick={handleSubmit}
+                onClick={() => handleSubmit('NORMAL')}
                 disabled={submitting}
                 className="bg-purple-600 hover:bg-purple-700 text-white font-bold flex items-center gap-1.5"
               >
@@ -441,6 +785,108 @@ export default function Stage2AssessmentModal({
           </div>
         )}
       </div>
+
+      {/* Normal Submission Clean Success Modal */}
+      {normalSubmitSuccessModal && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-emerald-500 ring-4 ring-emerald-500/20 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+              <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+            </div>
+
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                {normalSubmitSuccessModal.title || 'Exam Submitted Successfully!'}
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                {normalSubmitSuccessModal.message || 'Your assessment has been recorded. Reviewing your scores...'}
+              </p>
+            </div>
+
+            <div className="flex justify-center pt-1">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Score Recorded
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Proctoring Warning & Violation Alert Modal */}
+      {proctoringModal && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div
+            className={`bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full border shadow-2xl space-y-4 ${
+              proctoringModal.level === 'terminated'
+                ? 'border-rose-500 ring-4 ring-rose-500/20'
+                : proctoringModal.level === 'danger'
+                ? 'border-rose-400 ring-2 ring-rose-400/20'
+                : 'border-amber-400 ring-2 ring-amber-400/20'
+            }`}
+          >
+            <div
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto ${
+                proctoringModal.level === 'terminated'
+                  ? 'bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-400'
+                  : proctoringModal.level === 'danger'
+                  ? 'bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-400'
+                  : 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400'
+              }`}
+            >
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-2">
+              <h3 className="text-base font-black text-slate-900 dark:text-white">
+                {proctoringModal.title}
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                {proctoringModal.message}
+              </p>
+              {proctoringModal.level !== 'terminated' && (
+                <div className="inline-block text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 py-1 px-3 rounded-lg border border-amber-200 dark:border-amber-800">
+                  Violations Remaining: {2 - proctoringModal.count}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-center pt-2">
+              {proctoringModal.level === 'terminated' ? (
+                proctoringModal.completed ? (
+                  <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2 py-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    Exam submitted with proctoring flag. Redirecting to dashboard...
+                  </div>
+                ) : (
+                  <div className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-2 py-2">
+                    <div className="w-3.5 h-3.5 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />
+                    Submitting flagged exam to recruiter...
+                  </div>
+                )
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setProctoringModal(null);
+                    if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+                      document.documentElement.requestFullscreen().catch(() => {});
+                    }
+                  }}
+                  className={
+                    proctoringModal.level === 'danger'
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : 'bg-amber-600 hover:bg-amber-700'
+                  }
+                >
+                  I Understand & Resume Exam
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

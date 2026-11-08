@@ -18,6 +18,19 @@ export const AuthProvider = ({ children }) => {
       if (localStorage.getItem('token')) {
         const userData = await authService.getCurrentUser();
         setUser(userData);
+        const savedView = localStorage.getItem('viewMode');
+        if (!savedView || (userData.role === 'RECRUITER' && savedView === 'user')) {
+          if (userData.role === 'SUPER_ADMIN') {
+            setViewMode('admin');
+            localStorage.setItem('viewMode', 'admin');
+          } else if (userData.role === 'RECRUITER' || userData.role === 'SUBSCRIBER') {
+            setViewMode('recruiter');
+            localStorage.setItem('viewMode', 'recruiter');
+          } else {
+            setViewMode('user');
+            localStorage.setItem('viewMode', 'user');
+          }
+        }
       } else {
         setUser(null);
       }
@@ -44,9 +57,9 @@ export const AuthProvider = ({ children }) => {
     if (currentUser.role === 'SUPER_ADMIN') {
       setViewMode('admin');
       localStorage.setItem('viewMode', 'admin');
-    } else if (currentUser.role === 'SUBSCRIBER') {
-      setViewMode('user');
-      localStorage.setItem('viewMode', 'user');
+    } else if (currentUser.role === 'RECRUITER' || currentUser.role === 'SUBSCRIBER') {
+      setViewMode('recruiter');
+      localStorage.setItem('viewMode', 'recruiter');
     } else {
       setViewMode('user');
       localStorage.setItem('viewMode', 'user');
@@ -89,7 +102,8 @@ export const AuthProvider = ({ children }) => {
   const role = user?.role || 'GUEST';
   const isSuperAdmin = role === 'SUPER_ADMIN';
   const isSubscriber = role === 'SUBSCRIBER';
-  const isNormalUser = role === 'NORMAL_USER';
+  const isRecruiter = role === 'RECRUITER' || role === 'SUBSCRIBER';
+  const isNormalUser = role === 'NORMAL_USER' || role === 'USER';
   const isVerified = Boolean(user?.is_verified_badge);
 
   return (
@@ -107,6 +121,7 @@ export const AuthProvider = ({ children }) => {
         role,
         isSuperAdmin,
         isSubscriber,
+        isRecruiter,
         isNormalUser,
         isVerified,
         viewMode,

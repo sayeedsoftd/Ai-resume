@@ -28,7 +28,15 @@ export default function CreateJobModal({
   const [location, setLocation] = useState('Remote');
   const [jobType, setJobType] = useState('FULL_TIME');
   const [experienceLevel, setExperienceLevel] = useState('MID');
-  const [salaryRange, setSalaryRange] = useState('$80,000 - $110,000');
+  const [salaryRange, setSalaryRange] = useState('৳40,000 - ৳60,000');
+
+  // BDjobs-style Industry Categorization, Workplace Type, and Salary Range
+  const [category, setCategory] = useState('Software Engineering');
+  const [workplaceType, setWorkplaceType] = useState('ON_SITE'); // 'ON_SITE' | 'REMOTE' | 'HYBRID'
+  const [minSalary, setMinSalary] = useState('');
+  const [maxSalary, setMaxSalary] = useState('');
+  const [isSalaryNegotiable, setIsSalaryNegotiable] = useState(false);
+  const [experienceYearsRequired, setExperienceYearsRequired] = useState(0);
 
   // 1. Passing Score Benchmark (%) (min: 40, max: 100, default: 70)
   const [passingScore, setPassingScore] = useState(70);
@@ -56,7 +64,13 @@ export default function CreateJobModal({
         setLocation(initialData.location || 'Remote');
         setJobType(initialData.job_type || 'FULL_TIME');
         setExperienceLevel(initialData.experience_level || 'MID');
-        setSalaryRange(initialData.salary_range || '$80,000 - $110,000');
+        setSalaryRange(initialData.salary_range || '৳40,000 - ৳60,000');
+        setCategory(initialData.category || 'Software Engineering');
+        setWorkplaceType(initialData.workplace_type || 'ON_SITE');
+        setMinSalary(initialData.min_salary !== undefined && initialData.min_salary !== null ? String(initialData.min_salary) : '');
+        setMaxSalary(initialData.max_salary !== undefined && initialData.max_salary !== null ? String(initialData.max_salary) : '');
+        setIsSalaryNegotiable(Boolean(initialData.is_salary_negotiable));
+        setExperienceYearsRequired(initialData.experience_years_required || 0);
         setPassingScore(
           initialData.passing_score !== undefined && initialData.passing_score !== null
             ? initialData.passing_score
@@ -85,7 +99,13 @@ export default function CreateJobModal({
         setLocation('Remote');
         setJobType('FULL_TIME');
         setExperienceLevel('MID');
-        setSalaryRange('$80,000 - $110,000');
+        setSalaryRange('৳40,000 - ৳60,000');
+        setCategory('Software Engineering');
+        setWorkplaceType('ON_SITE');
+        setMinSalary('');
+        setMaxSalary('');
+        setIsSalaryNegotiable(false);
+        setExperienceYearsRequired(0);
         setPassingScore(70);
         setHasManualStage(false);
         setManualQuestions([]);
@@ -197,16 +217,32 @@ export default function CreateJobModal({
         .map((s) => s.trim())
         .filter(Boolean);
 
+      // Format salary range display
+      let formattedSalary = salaryRange.trim();
+      if (isSalaryNegotiable && !minSalary) {
+        formattedSalary = 'Negotiable';
+      } else if (minSalary && maxSalary) {
+        formattedSalary = `৳${Number(minSalary).toLocaleString()} - ৳${Number(maxSalary).toLocaleString()}`;
+      } else if (minSalary) {
+        formattedSalary = `৳${Number(minSalary).toLocaleString()}+`;
+      }
+
       // Structure manual_questions as both an array of objects and partitioned for maximum compatibility
       const payload = {
         title: title.trim(),
         company_name: companyName.trim(),
         description: description.trim(),
         required_skills: skillsArray,
-        location: location.trim() || 'Remote',
+        location: location.trim() || (workplaceType === 'REMOTE' ? 'Remote' : 'Dhaka, Bangladesh'),
         job_type: jobType,
         experience_level: experienceLevel,
-        salary_range: salaryRange.trim(),
+        salary_range: formattedSalary || 'Negotiable',
+        category: category || 'Software Engineering',
+        workplace_type: workplaceType || 'ON_SITE',
+        min_salary: minSalary ? parseFloat(minSalary) : null,
+        max_salary: maxSalary ? parseFloat(maxSalary) : null,
+        is_salary_negotiable: Boolean(isSalaryNegotiable),
+        experience_years_required: parseInt(experienceYearsRequired, 10) || 0,
         passing_score: Number(passingScore) || 70,
         has_manual_stage: Boolean(hasManualStage),
         manual_questions: hasManualStage ? manualQuestions : null,
@@ -279,10 +315,125 @@ export default function CreateJobModal({
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* BDjobs-style Industry Categorization & Workplace Model */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800">
+          <div>
+            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+              Job Category / Industry *
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="Software Engineering">Software Engineering</option>
+              <option value="AI / Machine Learning">AI / Machine Learning</option>
+              <option value="Data Science & Analytics">Data Science & Analytics</option>
+              <option value="UI/UX & Product Design">UI/UX & Product Design</option>
+              <option value="Quality Assurance & Testing">Quality Assurance & Testing</option>
+              <option value="DevOps & Cloud Engineering">DevOps & Cloud Engineering</option>
+              <option value="Mobile App Development">Mobile App Development</option>
+              <option value="Cybersecurity & Networking">Cybersecurity & Networking</option>
+              <option value="Product & Project Management">Product & Project Management</option>
+              <option value="Database Administration">Database Administration</option>
+              <option value="IT & Tech Support">IT & Tech Support</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+              Workplace Model *
+            </label>
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
+              {[
+                { id: 'ON_SITE', label: 'On-site' },
+                { id: 'REMOTE', label: 'Remote' },
+                { id: 'HYBRID', label: 'Hybrid' },
+              ].map((wp) => (
+                <button
+                  type="button"
+                  key={wp.id}
+                  onClick={() => setWorkplaceType(wp.id)}
+                  className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    workplaceType === wp.id
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300/60 dark:hover:bg-slate-700/60'
+                  }`}
+                >
+                  {wp.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Salary Range & Experience Required */}
+        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              Salary Specification (৳ BDT)
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isSalaryNegotiable}
+                onChange={(e) => setIsSalaryNegotiable(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="font-semibold text-slate-700 dark:text-slate-300">Negotiable Salary</span>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                Min Monthly Salary (৳)
+              </label>
+              <input
+                type="number"
+                placeholder="e.g. 30000"
+                value={minSalary}
+                onChange={(e) => setMinSalary(e.target.value)}
+                disabled={isSalaryNegotiable && !minSalary}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                Max Monthly Salary (৳)
+              </label>
+              <input
+                type="number"
+                placeholder="e.g. 50000"
+                value={maxSalary}
+                onChange={(e) => setMaxSalary(e.target.value)}
+                disabled={isSalaryNegotiable && !minSalary}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                Min Experience (Years)
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="25"
+                placeholder="0 for freshers"
+                value={experienceYearsRequired}
+                onChange={(e) => setExperienceYearsRequired(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Job Type
+              Employment Schedule / Job Type
             </label>
             <select
               value={jobType}
@@ -292,33 +443,25 @@ export default function CreateJobModal({
               <option value="FULL_TIME">Full Time</option>
               <option value="PART_TIME">Part Time</option>
               <option value="CONTRACT">Contract</option>
-              <option value="REMOTE">Remote</option>
               <option value="INTERNSHIP">Internship</option>
             </select>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Experience Level
+              Seniority Level
             </label>
             <select
               value={experienceLevel}
               onChange={(e) => setExperienceLevel(e.target.value)}
               className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="ENTRY">Entry Level</option>
+              <option value="ENTRY">Entry Level / Junior</option>
               <option value="MID">Mid Level</option>
               <option value="SENIOR">Senior Level</option>
-              <option value="LEAD">Lead / Architect</option>
+              <option value="LEAD">Lead / Architect / Director</option>
             </select>
           </div>
-
-          <Input
-            label="Salary Range"
-            value={salaryRange}
-            onChange={(e) => setSalaryRange(e.target.value)}
-            placeholder="e.g. $80,000 - $110,000"
-          />
         </div>
 
         <div>

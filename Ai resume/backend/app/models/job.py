@@ -20,7 +20,16 @@ class Job(Base):
     experience_level = Column(SQLEnum(ExperienceLevel), default=ExperienceLevel.MID, nullable=False)
     location = Column(String(200), nullable=False)
     job_type = Column(SQLEnum(JobType), default=JobType.FULL_TIME, nullable=False)
-    salary_range = Column(String(100), nullable=True)  # e.g., "$80,000 - $110,000"
+    salary_range = Column(String(100), nullable=True)  # e.g., "$80,000 - $110,000" or "৳40,000 - ৳60,000"
+    
+    # BDjobs-style Industry Categorization, Workplace Type, and Salary Range
+    category = Column(String(100), default="Software Engineering", nullable=False, index=True)
+    workplace_type = Column(String(50), default="ON_SITE", nullable=False, index=True) # ON_SITE, REMOTE, HYBRID
+    min_salary = Column(Float, nullable=True)
+    max_salary = Column(Float, nullable=True)
+    is_salary_negotiable = Column(Boolean, default=False, nullable=False)
+    experience_years_required = Column(Integer, default=0, nullable=False)
+
     is_active = Column(Boolean, default=True, nullable=False, index=True)
     is_frozen = Column(Boolean, default=False, nullable=False, index=True)
     is_deleted = Column(Boolean, default=False, nullable=False, index=True)
