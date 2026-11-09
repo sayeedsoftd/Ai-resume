@@ -39,6 +39,10 @@ class Job(Base):
     has_manual_stage = Column(Boolean, default=False, nullable=False) # Enable Stage-2 Custom Manual Assessment
     manual_questions = Column(JSON, nullable=True) # {"mcqs": [...], "written": [...]}
 
+    # Anti-Ghosting Hiring SLA Commitment
+    sla_review_days = Column(Integer, default=5, nullable=False) # Promised review deadline in days (e.g. 3, 5, 7, 14)
+    sla_guarantee_enabled = Column(Boolean, default=True, nullable=False)
+
     # Oversight metrics
     views_count = Column(Integer, default=0, nullable=False)
 

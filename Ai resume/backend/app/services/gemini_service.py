@@ -6,6 +6,7 @@ from google.genai import types
 from app.core.config import settings
 from app.utils.logger import logger
 from app.services.matcher import JobMatchService
+from app.utils.i18n_helper import get_ai_localization_directive
 
 # Multi-model pool: gemini-3.1-flash-lite, gemini-3.5-flash, gemini-3.8-flash, gemini-flash-latest
 GEMINI_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest"]
@@ -788,6 +789,7 @@ Return a strict, valid JSON object with the following schema:
         experience_level: str = "MID",
         skills: List[str] = None,
         count: int = 5,
+        target_language: Optional[str] = "en",
     ) -> List[Dict[str, Any]]:
         """
         Generates context-aware technical and behavioral interview questions for a role.
@@ -812,7 +814,7 @@ Return a strict, valid JSON array of objects:
     "hint": "<Helpful hint for candidate if stuck>"
   }}
 ]
-"""
+""" + get_ai_localization_directive(target_language)
 
         raw_text = cls._generate_with_fallback(prompt, is_json=True)
         if raw_text:

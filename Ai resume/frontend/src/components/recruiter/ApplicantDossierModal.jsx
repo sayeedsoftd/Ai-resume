@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   X,
   CheckCircle2,
@@ -42,6 +43,8 @@ import {
   Zap,
   TrendingUp,
   Star,
+  Sprout,
+  MessageSquare,
 } from 'lucide-react';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -62,13 +65,17 @@ export default function ApplicantDossierModal({
   onDecisionMade,
   blindMode = true,
 }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [dossier, setDossier] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
-  const [activeTab, setActiveTab] = useState('cv'); // 'cv' | 'test' | 'code' | 'stage2' | 'viva'
+  const [activeTab, setActiveTab] = useState('cv'); // 'cv' | 'test' | 'code' | 'stage2' | 'viva' | 'integrity'
   const [isBlindMode, setIsBlindMode] = useState(blindMode);
   const [showRevealPrompt, setShowRevealPrompt] = useState(false);
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(true);
+  const [auditingProjects, setAuditingProjects] = useState(false);
+  const [integrityAudit, setIntegrityAudit] = useState(null);
+  const [expandedProjects, setExpandedProjects] = useState({});
 
   // Decision Modal State
   const [decisionType, setDecisionType] = useState(null); // 'SHORTLIST' | 'REJECT' | 'SCHEDULE_INTERVIEW' | null
@@ -77,6 +84,7 @@ export default function ApplicantDossierModal({
   const [meetingLink, setMeetingLink] = useState('https://meet.google.com/');
   const [recruiterNote, setRecruiterNote] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [generateAiFeedback, setGenerateAiFeedback] = useState(true);
   const [submittingDecision, setSubmittingDecision] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
 
@@ -96,6 +104,9 @@ export default function ApplicantDossierModal({
     try {
       const data = await jobService.getApplicationDossier(applicationId, blind);
       setDossier(data);
+      if (data?.project_integrity_audit) {
+        setIntegrityAudit(data.project_integrity_audit);
+      }
     } catch (err) {
       console.error('Failed to load applicant dossier:', err);
       setErrorMsg(
@@ -105,6 +116,219 @@ export default function ApplicantDossierModal({
       setLoading(false);
     }
   };
+
+  const handleRunProjectAudit = async () => {
+    setAuditingProjects(true);
+    try {
+      const result = await jobService.auditApplicationProjects(applicationId);
+      setIntegrityAudit(result);
+    } catch (err) {
+      console.error('Failed to run project integrity audit:', err);
+    } finally {
+      setAuditingProjects(false);
+    }
+  };
+
+  const toggleProjectAccordion = (idx) => {
+    setExpandedProjects((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
+  };
+
+  const renderProjectIntegritySection = () => (
+    <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+            <ShieldAlert className="w-5 h-5 text-indigo-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                🔍 AI Project Authenticity & Plagiarism Audit
+              </h3>
+              {integrityAudit ? (
+                integrityAudit.overall_originality_score >= 80 ? (
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-2xs">
+                    <span>🟢</span> {integrityAudit.overall_originality_score}% Genuine & Custom Built
+                  </span>
+                ) : integrityAudit.overall_originality_score >= 50 ? (
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 shadow-2xs">
+                    <span>🟡</span> {integrityAudit.overall_originality_score}% Generic Boilerplate / Mixed Patterns
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shadow-2xs">
+                    <span>🔴</span> Suspected Tutorial Clone / Plagiarism Flagged ({integrityAudit.overall_originality_score}%)
+                  </span>
+                )
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-300 dark:border-slate-700">
+                  Audit Pending
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Gemini Pro forensic auditor checking YouTube/Udemy clone patterns, commit dumps, and unoriginal code structures.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleRunProjectAudit}
+          disabled={auditingProjects}
+          className="px-3.5 py-1.5 text-xs font-semibold rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 flex items-center gap-1.5 transition disabled:opacity-50 shrink-0 cursor-pointer shadow-xs"
+        >
+          <Sparkles className={`w-3.5 h-3.5 ${auditingProjects ? 'animate-spin text-amber-400' : 'text-indigo-400'}`} />
+          <span>{auditingProjects ? 'Forensic AI Auditing...' : integrityAudit ? 'Re-audit Projects' : 'Run Forensic Audit'}</span>
+        </button>
+      </div>
+
+      {integrityAudit ? (
+        <div className="space-y-4 pt-1">
+          {/* Forensic Summary */}
+          {integrityAudit.ai_forensic_summary && (
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 leading-relaxed space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                <span>AI Forensic Summary & Engineering Verdict:</span>
+              </div>
+              <p>{integrityAudit.ai_forensic_summary}</p>
+            </div>
+          )}
+
+          {/* Audited Projects List with Originality Bar & Evidence Accordion */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Audited Candidate Projects ({integrityAudit.audited_projects?.length || 0})
+            </h4>
+
+            {(!integrityAudit.audited_projects || integrityAudit.audited_projects.length === 0) ? (
+              <p className="text-xs text-slate-400 italic">No project repositories were detected to evaluate.</p>
+            ) : (
+              integrityAudit.audited_projects.map((proj, idx) => {
+                const isExpanded = !!expandedProjects[idx];
+                const isClone = proj.is_tutorial_clone || proj.originality_score < 50;
+                const score = proj.originality_score ?? 50;
+
+                const barColor =
+                  score >= 80 ? 'bg-emerald-500' : score >= 50 ? 'bg-amber-500' : 'bg-rose-500';
+                const badgeBg =
+                  score >= 80
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : score >= 50
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30';
+
+                return (
+                  <div
+                    key={idx}
+                    className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 space-y-2.5 transition"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-slate-900 dark:text-white">
+                          {proj.project_name}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${badgeBg}`}>
+                          {proj.verdict || (isClone ? 'Tutorial Clone' : 'Custom Built')}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        {/* Originality Progress Bar */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 font-medium">Originality:</span>
+                          <div className="w-24 h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                            <div
+                              className={`h-full ${barColor} transition-all duration-500`}
+                              style={{ width: `${score}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200 min-w-[32px]">
+                            {score}%
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleProjectAccordion(idx)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition cursor-pointer"
+                          title="Toggle evidence accordion"
+                        >
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Pattern Match Notice */}
+                    {proj.matched_pattern && (
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 font-mono">
+                        <span className="text-indigo-400 font-semibold">Matched Pattern: </span>
+                        {proj.matched_pattern}
+                      </p>
+                    )}
+
+                    {/* Custom Architecture Notes */}
+                    {proj.custom_architecture_notes && (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="font-semibold text-slate-400">Architecture Notes: </span>
+                        {proj.custom_architecture_notes}
+                      </p>
+                    )}
+
+                    {/* Expandable Red Flags & Clone Evidence Accordion */}
+                    {isExpanded && (
+                      <div className="mt-2.5 pt-2.5 border-t border-slate-200 dark:border-slate-800/80 space-y-2">
+                        <div className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Forensic Red Flags & Clone Evidence:</span>
+                        </div>
+
+                        {(!proj.red_flags || proj.red_flags.length === 0) ? (
+                          <p className="text-[11px] text-emerald-400 italic">
+                            ✅ No tutorial cloning red flags detected. Project exhibits custom implementation.
+                          </p>
+                        ) : (
+                          <ul className="space-y-1 pl-1">
+                            {proj.red_flags.map((flag, fIdx) => (
+                              <li
+                                key={fIdx}
+                                className="text-[11px] text-rose-300 dark:text-rose-400/90 flex items-start gap-1.5"
+                              >
+                                <span className="text-rose-500 shrink-0 font-bold">•</span>
+                                <span>{flag}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-850/60 border border-dashed border-slate-300 dark:border-slate-800 text-center space-y-2">
+          <p className="text-xs text-slate-400">
+            No project plagiarism audit has been executed for this candidate yet.
+          </p>
+          <button
+            type="button"
+            onClick={handleRunProjectAudit}
+            disabled={auditingProjects}
+            className="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm inline-flex items-center gap-2 cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>{auditingProjects ? 'Auditing Candidate Projects...' : 'Run Forensic Plagiarism & Tutorial Audit'}</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   if (!isOpen) return null;
 
@@ -155,15 +379,23 @@ export default function ApplicantDossierModal({
   const handleExecuteDecision = async (statusToSet) => {
     setSubmittingDecision(true);
     try {
-      const payload = {
-        status: statusToSet,
-        interview_date: statusToSet !== 'REJECTED' ? interviewDate || undefined : undefined,
-        meeting_link: statusToSet !== 'REJECTED' ? meetingLink || undefined : undefined,
-        recruiter_note: statusToSet !== 'REJECTED' ? recruiterNote || undefined : undefined,
-        rejection_reason: statusToSet === 'REJECTED' ? rejectionReason || undefined : undefined,
-      };
+      let updated;
+      if (statusToSet === 'REJECTED') {
+        updated = await jobService.rejectApplication(applicationId, {
+          recruiter_notes: rejectionReason || undefined,
+          generate_ai_feedback: generateAiFeedback,
+        });
+      } else {
+        const payload = {
+          status: statusToSet,
+          interview_date: statusToSet !== 'REJECTED' ? interviewDate || undefined : undefined,
+          meeting_link: statusToSet !== 'REJECTED' ? meetingLink || undefined : undefined,
+          recruiter_note: statusToSet !== 'REJECTED' ? recruiterNote || undefined : undefined,
+          rejection_reason: statusToSet === 'REJECTED' ? rejectionReason || undefined : undefined,
+        };
+        updated = await jobService.makeRecruiterDecision(applicationId, payload);
+      }
 
-      const updated = await jobService.makeRecruiterDecision(applicationId, payload);
       setDossier((prev) => ({
         ...prev,
         application: { ...prev.application, ...updated },
@@ -350,6 +582,30 @@ export default function ApplicantDossierModal({
                 </button>
               )}
 
+              {/* Project Integrity & Plagiarism Badge */}
+              {integrityAudit && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('integrity')}
+                  className="cursor-pointer"
+                  title="Click to inspect AI project authenticity and plagiarism audit"
+                >
+                  {integrityAudit.overall_originality_score >= 80 ? (
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-2xs hover:bg-emerald-500/20 transition">
+                      <span>🟢</span> {integrityAudit.overall_originality_score}% Genuine & Custom Built
+                    </span>
+                  ) : integrityAudit.overall_originality_score >= 50 ? (
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 shadow-2xs hover:bg-amber-500/20 transition">
+                      <span>🟡</span> {integrityAudit.overall_originality_score}% Generic Boilerplate / Mixed
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shadow-2xs hover:bg-rose-500/20 transition">
+                      <span>🔴</span> Suspected Tutorial Clone / Plagiarism Flagged ({integrityAudit.overall_originality_score}%)
+                    </span>
+                  )}
+                </button>
+              )}
+
               <span className="px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
                 {app?.status || 'APPLIED'}
               </span>
@@ -484,6 +740,35 @@ export default function ApplicantDossierModal({
                 </span>
               )}
             </button>
+
+            <button
+              onClick={() => setActiveTab('integrity')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                activeTab === 'integrity'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <ShieldAlert className="w-4 h-4" />
+              🔍 Project Integrity & Plagiarism
+              {integrityAudit ? (
+                <span
+                  className={`px-1.5 py-0.2 rounded text-[10px] font-black font-mono ${
+                    integrityAudit.overall_originality_score >= 80
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                      : integrityAudit.overall_originality_score >= 50
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                      : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                  }`}
+                >
+                  {integrityAudit.overall_originality_score}%
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-200 dark:bg-slate-700 text-slate-500 font-bold">
+                  Audit
+                </span>
+              )}
+            </button>
           </div>
 
           {resumeUrl && (
@@ -528,6 +813,69 @@ export default function ApplicantDossierModal({
                TAB 1: CANDIDATE CV & ATS OVERVIEW
                ========================================================= */
             <div className="space-y-6">
+              {/* Scheduled Interview & WhatsApp Alert Delivered Status Banner */}
+              {(app?.status === 'INTERVIEW' || app?.interview_date || app?.notification_sent) && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50/80 via-teal-50/50 to-indigo-50/60 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-slate-900 border border-emerald-200 dark:border-emerald-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2 rounded-xl bg-emerald-600 text-white shadow-xs shrink-0">
+                      <Calendar className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <strong className="text-slate-900 dark:text-white font-bold">
+                          Interview Scheduled: {app?.interview_date || 'Upcoming'} {app?.interview_time ? `at ${app.interview_time}` : ''}
+                        </strong>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shadow-2xs">
+                          <span>🟢</span> WhatsApp Alert Delivered
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30">
+                          📱 SMS Dispatched
+                        </span>
+                      </div>
+                      {app?.meeting_link && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
+                          Meeting Link: <a href={app.meeting_link} target="_blank" rel="noreferrer" className="text-indigo-600 dark:text-indigo-400 underline">{app.meeting_link}</a>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {app?.meeting_link && (
+                    <a
+                      href={app.meeting_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1.5 shrink-0 shadow-sm"
+                    >
+                      <Video className="w-3.5 h-3.5" /> Join Room
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* Constructive AI Career Growth Roadmap Status Banner */}
+              {app?.ai_growth_feedback && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50/80 via-teal-50/60 to-indigo-50/60 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-slate-900 border border-emerald-200 dark:border-emerald-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2 rounded-xl bg-emerald-600 text-white shadow-xs shrink-0">
+                      <Sprout className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <strong className="text-slate-900 dark:text-white font-bold">
+                          Empathetic AI Career Growth Roadmap Generated
+                        </strong>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
+                          Gemini Pro Mentorship
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Constructive improvement roadmap, verified strengths, and study checklist delivered to candidate dashboard.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* AI Salary Benchmark & Employer Budget Fit Card */}
               {app?.expected_salary != null && (
                 <SalaryBenchmarkWidget
@@ -585,6 +933,9 @@ export default function ApplicantDossierModal({
                   </div>
                 </div>
               )}
+
+              {/* 🔍 AI Project Authenticity & Plagiarism Detector Section */}
+              {renderProjectIntegritySection()}
 
               {/* ATS 4-Factor Breakdown Card */}
               <div className="bg-gradient-to-br from-indigo-50/70 via-white to-violet-50/50 dark:from-slate-900 dark:via-slate-850 dark:to-indigo-950/30 p-6 rounded-2xl border border-indigo-100 dark:border-indigo-900/40 space-y-4">
@@ -1959,6 +2310,10 @@ export default function ApplicantDossierModal({
                 }}
               />
             </div>
+          ) : activeTab === 'integrity' ? (
+            <div className="p-6">
+              {renderProjectIntegritySection()}
+            </div>
           ) : null}
         </div>
 
@@ -2032,6 +2387,25 @@ export default function ApplicantDossierModal({
                 : dossier?.active_offer_letter
                 ? 'View / Edit Offer Letter'
                 : '1-Click AI Offer Letter'}
+            </Button>
+
+            {/* In-App Direct Live Chat with Candidate */}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                const targetUserId = candidate?.user_id || candidate?.id || app?.user_id;
+                if (targetUserId) {
+                  onClose();
+                  navigate(`/messages?user=${targetUserId}&applicationId=${applicationId}`);
+                } else {
+                  alert('Candidate user ID not found.');
+                }
+              }}
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 flex items-center gap-1.5 shadow-sm"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              Direct Live Chat
             </Button>
           </div>
         </div>
@@ -2188,7 +2562,7 @@ export default function ApplicantDossierModal({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Optional Constructive Feedback:
+                Private Recruiter Note (Optional):
               </label>
               <textarea
                 rows={3}
@@ -2197,6 +2571,26 @@ export default function ApplicantDossierModal({
                 onChange={(e) => setRejectionReason(e.target.value)}
                 className="w-full p-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
               />
+            </div>
+
+            {/* Checkbox: Empathetic AI Growth Feedback */}
+            <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-50/70 to-indigo-50/70 dark:from-emerald-950/40 dark:to-indigo-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-start gap-2.5">
+              <input
+                type="checkbox"
+                id="check-generate-growth"
+                checked={generateAiFeedback}
+                onChange={(e) => setGenerateAiFeedback(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              />
+              <label htmlFor="check-generate-growth" className="text-xs cursor-pointer select-none">
+                <span className="font-bold text-slate-900 dark:text-white block flex items-center gap-1.5">
+                  <Sprout className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  Generate empathetic AI Growth Feedback for candidate (Recommended)
+                </span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                  Gemini Pro will evaluate candidate test metrics, missed areas, and skill gaps to provide a respectful, constructive career roadmap.
+                </span>
+              </label>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">
@@ -2215,7 +2609,7 @@ export default function ApplicantDossierModal({
                 disabled={submittingDecision}
                 className="bg-rose-600 hover:bg-rose-700"
               >
-                {submittingDecision ? 'Processing...' : 'Confirm Rejection'}
+                {submittingDecision ? 'Processing & Generating...' : 'Confirm Rejection'}
               </Button>
             </div>
           </div>

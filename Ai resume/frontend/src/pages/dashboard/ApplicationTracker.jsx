@@ -22,14 +22,17 @@ import {
   ChevronRight,
   Briefcase,
   FileText,
+  Sprout,
 } from 'lucide-react';
 import { jobService } from '../../services/jobService';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import Modal from '../../components/ui/Modal';
 import SubmissionReviewModal from '../../components/assessment/SubmissionReviewModal';
 import Stage2AssessmentModal from '../../components/assessment/Stage2AssessmentModal';
 import ApplicationJourneyStepper from '../../components/candidate/ApplicationJourneyStepper';
 import OfferViewModal from '../../components/candidate/OfferViewModal';
+import AIGrowthFeedbackCard from '../../components/candidate/AIGrowthFeedbackCard';
 import ErrorBoundary from '../../components/ui/ErrorBoundary';
 
 const STATUS_COLUMNS = [
@@ -48,6 +51,7 @@ export default function ApplicationTracker() {
   const [selectedSubmissionId, setSelectedSubmissionId] = useState(null);
   const [stage2ModalData, setStage2ModalData] = useState(null);
   const [viewingOfferAppId, setViewingOfferAppId] = useState(null);
+  const [viewingFeedbackAppId, setViewingFeedbackAppId] = useState(null);
 
   useEffect(() => {
     fetchApplications();
@@ -68,6 +72,64 @@ export default function ApplicationTracker() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getSlaInfo = (app) => {
+    const activeStatuses = ['APPLIED', 'SCREENING', 'STAGE1_PASSED', 'STAGE2_SUBMITTED'];
+    if (!activeStatuses.includes(app.status)) return null;
+
+    let deadline = null;
+    if (app.sla_deadline) {
+      deadline = new Date(app.sla_deadline);
+    } else if (app.applied_at) {
+      const days = app.sla_review_days || app.job?.sla_review_days || 5;
+      deadline = new Date(new Date(app.applied_at).getTime() + days * 24 * 60 * 60 * 1000);
+    }
+    if (!deadline || isNaN(deadline.getTime())) return null;
+
+    const now = new Date();
+    const diffMs = deadline - now;
+    const isBreached = Boolean(app.sla_breached) || diffMs <= 0;
+
+    if (isBreached) {
+      return {
+        isBreached: true,
+        label: '⚠️ SLA Expired • Action Pending by Recruiter',
+      };
+    }
+
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const days = Math.floor(diffHours / 24);
+    const hours = diffHours % 24;
+
+    let remaining = '';
+    if (days > 0) {
+      remaining = `${days}d ${hours}h left`;
+    } else if (hours > 0) {
+      remaining = `${hours}h left`;
+    } else {
+      const mins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+      remaining = `${mins}m left`;
+    }
+
+    return {
+      isBreached: false,
+      label: `⏱️ Review Guaranteed: ${remaining}`,
+    };
+  };
+
+  const renderSlaBadge = (app) => {
+    const info = getSlaInfo(app);
+    if (!info) return null;
+    return info.isBreached ? (
+      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+        {info.label}
+      </span>
+    ) : (
+      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 flex items-center gap-1">
+        {info.label}
+      </span>
+    );
   };
 
   const getStatusBadge = (status) => {
@@ -93,9 +155,11 @@ export default function ApplicationTracker() {
           </span>
         );
       case 'STAGE1_FAILED':
+      case 'REJECTED':
         return (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
-            Failed (Screening)
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 dark:from-emerald-950/60 dark:via-teal-950/50 dark:to-indigo-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1.5 shadow-xs">
+            <Sprout className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>📈 Review Completed • AI Growth Feedback Available</span>
           </span>
         );
       case 'STAGE2_INVITED':
@@ -123,8 +187,6 @@ export default function ApplicationTracker() {
             Job Closed by Recruiter
           </span>
         );
-      case 'REJECTED':
-        return <Badge variant="danger">Not Selected</Badge>;
       default:
         return <Badge variant="info">Applied</Badge>;
     }
@@ -290,6 +352,7 @@ export default function ApplicationTracker() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
+                    {renderSlaBadge(app)}
                     {app.match_score && (
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                         <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
@@ -314,6 +377,19 @@ export default function ApplicationTracker() {
                   }
                 />
 
+                {/* Constructive AI Career Growth Roadmap for Not Selected / Benchmark Not Met */}
+                {['REJECTED', 'STAGE1_FAILED'].includes(app.status) && (
+                  <div className="pt-1">
+                    <AIGrowthFeedbackCard
+                      applicationId={app.id}
+                      initialFeedback={app.ai_growth_feedback}
+                      jobTitle={app.job?.title}
+                      companyName={app.job?.company_name}
+                      defaultExpanded={false}
+                    />
+                  </div>
+                )}
+
                 {/* Quick Action Footer */}
                 <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800/80 text-xs flex-wrap gap-2">
                   <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400 text-[11px]">
@@ -329,6 +405,18 @@ export default function ApplicationTracker() {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {['REJECTED', 'STAGE1_FAILED'].includes(app.status) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setViewingFeedbackAppId(app.id)}
+                        className="text-xs font-bold text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                      >
+                        <Sprout className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                        AI Growth Roadmap
+                      </Button>
+                    )}
+
                     {(app.status === 'OFFER_EXTENDED' || app.status === 'ACCEPTED') && (
                       <Button
                         size="sm"
@@ -445,6 +533,12 @@ export default function ApplicationTracker() {
                             {app.job?.company_name || 'Hiring Organization'}
                           </div>
 
+                          {renderSlaBadge(app) && (
+                            <div className="pt-0.5 flex flex-wrap">
+                              {renderSlaBadge(app)}
+                            </div>
+                          )}
+
                           {/* Live Journey Progress Stepper (Compact Mode) */}
                           <div className="pt-1">
                             <ApplicationJourneyStepper
@@ -464,6 +558,16 @@ export default function ApplicationTracker() {
 
                           {/* Action Button for Assessment Review */}
                           <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex flex-col gap-1.5">
+                            {['REJECTED', 'STAGE1_FAILED'].includes(app.status) && (
+                              <button
+                                onClick={() => setViewingFeedbackAppId(app.id)}
+                                className="w-full py-1.5 px-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-lg transition-colors flex items-center justify-center gap-1 border border-emerald-300 dark:border-emerald-800 shadow-2xs"
+                              >
+                                <Sprout className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                <span>🌱 View AI Growth Roadmap</span>
+                              </button>
+                            )}
+
                             {(app.status === 'OFFER_EXTENDED' || app.status === 'ACCEPTED') && (
                               <button
                                 onClick={() => setViewingOfferAppId(app.id)}
@@ -597,11 +701,26 @@ export default function ApplicationTracker() {
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-3.5">{getStatusBadge(app.status)}</td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex flex-col gap-1 items-start">
+                          {getStatusBadge(app.status)}
+                          {renderSlaBadge(app)}
+                        </div>
+                      </td>
                       <td className="px-5 py-3.5 text-slate-500">
                         {new Date(app.applied_at).toLocaleDateString()}
                       </td>
                       <td className="px-5 py-3.5 text-right space-x-1.5">
+                        {['REJECTED', 'STAGE1_FAILED'].includes(app.status) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setViewingFeedbackAppId(app.id)}
+                            className="text-[11px] py-1 px-2.5 font-bold text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                          >
+                            <Sprout className="w-3 h-3 mr-1 text-emerald-600" /> AI Growth
+                          </Button>
+                        )}
                         {(app.status === 'OFFER_EXTENDED' || app.status === 'ACCEPTED') && (
                           <Button
                             variant="primary"
@@ -691,6 +810,39 @@ export default function ApplicationTracker() {
             applicationId={viewingOfferAppId}
             onResponseRecorded={fetchApplications}
           />
+        )}
+
+        {/* Modal for AI Career Growth Roadmap */}
+        {viewingFeedbackAppId && (
+          <Modal
+            isOpen={Boolean(viewingFeedbackAppId)}
+            onClose={() => setViewingFeedbackAppId(null)}
+            title="🌱 Personalized Career Growth Roadmap"
+          >
+            {(() => {
+              const targetApp = safeApplications.find((a) => a.id === viewingFeedbackAppId);
+              return (
+                <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
+                  <AIGrowthFeedbackCard
+                    applicationId={viewingFeedbackAppId}
+                    initialFeedback={targetApp?.ai_growth_feedback}
+                    jobTitle={targetApp?.job?.title}
+                    companyName={targetApp?.job?.company_name}
+                    defaultExpanded={true}
+                  />
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setViewingFeedbackAppId(null)}
+                    >
+                      Close Roadmap
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
+          </Modal>
         )}
       </div>
     </ErrorBoundary>

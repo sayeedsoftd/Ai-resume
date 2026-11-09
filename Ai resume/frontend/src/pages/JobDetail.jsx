@@ -280,6 +280,14 @@ const JobDetail = () => {
                 : 'Fresher / 0 Yrs Exp'}
             </span>
 
+            {/* Anti-Ghosting SLA Guarantee Pill */}
+            {job.sla_guarantee_enabled !== false && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-cyan-50 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
+                <span>🛡️</span>
+                <span>{job.sla_review_days || 5}-Day Decision SLA</span>
+              </span>
+            )}
+
             <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 ml-auto">
               <MapPin className="w-3.5 h-3.5 text-slate-400" /> {job.location || 'Remote'}
             </span>

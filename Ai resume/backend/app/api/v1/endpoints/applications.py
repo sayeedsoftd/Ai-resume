@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, UploadFile, File, Form
@@ -15,6 +15,7 @@ from app.models.interview import Interview
 from app.models.assessment import JobAssessment, CandidateTestSubmission
 from app.models.offer_letter import OfferLetter
 from app.models.recruiter_note import CandidateEvaluationNote, RecommendationType
+from app.models.project_integrity import ProjectIntegrityAudit
 from app.models.enums import NotificationType, JobApplicationStatus
 from app.schemas.recruiter_note import (
     EvaluationNoteCreate,
@@ -26,6 +27,8 @@ from app.schemas.application import (
     JobApplicationResponse,
     JobApplicationUpdateStatus,
     RecruiterDecisionRequest,
+    RejectApplicationRequest,
+    GrowthFeedbackResponse,
     ApplicationDossierResponse,
     ScheduleInterviewRequest,
     SmartScheduleInterviewRequest,
@@ -39,6 +42,8 @@ from app.schemas.user import UserResponse
 from app.services.matcher import JobMatchService
 from app.services.email_service import SMTPEmailService
 from app.services.salary_benchmarker import SalaryBenchmarkService
+from app.services.feedback_service import FeedbackService
+from app.services.notification_gateway_service import NotificationGatewayService
 from app.utils.logger import logger
 
 router = APIRouter()
@@ -111,6 +116,11 @@ def apply_to_job(
         except Exception as sal_err:
             logger.warning(f"Could not compute initial salary benchmark: {sal_err}")
 
+    # Anti-Ghosting Hiring SLA: calculate deadline based on job commitment
+    sla_days = getattr(job, "sla_review_days", 5) or 5
+    now_utc = datetime.now(timezone.utc)
+    sla_deadline = now_utc + timedelta(days=int(sla_days))
+
     application = JobApplication(
         job_id=job.id,
         user_id=current_user.id,
@@ -120,6 +130,8 @@ def apply_to_job(
         expected_salary=application_in.expected_salary,
         salary_fit_status=fit_status,
         ai_salary_benchmark_analysis=salary_analysis,
+        sla_deadline=sla_deadline,
+        sla_breached=False,
     )
     db.add(application)
 
@@ -137,18 +149,54 @@ def apply_to_job(
     return application
 
 
+def check_and_update_sla(app: JobApplication, db: Session = None) -> bool:
+    """Helper to ensure SLA deadline is set and flag breached status if expired."""
+    now = datetime.now(timezone.utc)
+    updated = False
+    if not app.sla_deadline and app.applied_at:
+        review_days = 5
+        if app.job and getattr(app.job, "sla_review_days", None):
+            review_days = app.job.sla_review_days
+        app.sla_deadline = app.applied_at + timedelta(days=review_days)
+        updated = True
+    
+    pending_statuses = {
+        JobApplicationStatus.APPLIED,
+        JobApplicationStatus.SCREENING,
+        JobApplicationStatus.STAGE1_PASSED,
+        JobApplicationStatus.STAGE2_SUBMITTED,
+    }
+    if app.status in pending_statuses and app.sla_deadline:
+        deadline_naive = app.sla_deadline.replace(tzinfo=None) if hasattr(app.sla_deadline, 'tzinfo') and app.sla_deadline.tzinfo else app.sla_deadline
+        now_naive = now.replace(tzinfo=None)
+        if now_naive > deadline_naive and not app.sla_breached:
+            app.sla_breached = True
+            updated = True
+    return updated
+
+
 @router.get("/my-applications", response_model=List[JobApplicationResponse])
 def get_my_applications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List all job applications submitted by the logged-in candidate."""
-    return (
+    apps = (
         db.query(JobApplication)
         .filter(JobApplication.user_id == current_user.id)
         .order_by(JobApplication.applied_at.desc())
         .all()
     )
+    needs_commit = False
+    for app in apps:
+        if check_and_update_sla(app, db):
+            needs_commit = True
+    if needs_commit:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+    return apps
 
 
 @router.get("/recruiter/shortlisted-candidates", response_model=List[ShortlistedCandidateItem])
@@ -326,6 +374,16 @@ def get_job_applications(
         .order_by(JobApplication.match_score.desc(), JobApplication.applied_at.desc())
         .all()
     )
+
+    needs_commit = False
+    for app in apps:
+        if check_and_update_sla(app, db):
+            needs_commit = True
+    if needs_commit:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
 
     if not blind_mode:
         return apps
@@ -712,6 +770,24 @@ def get_application_dossier(
             is_admin=(current_user.role.value == "SUPER_ADMIN"),
         )
 
+    # Forensic Project Integrity & Tutorial Clone Audit
+    integrity_record = (
+        db.query(ProjectIntegrityAudit)
+        .filter(ProjectIntegrityAudit.application_id == application.id)
+        .first()
+    )
+    integrity_dict = None
+    if integrity_record:
+        integrity_dict = {
+            "id": integrity_record.id,
+            "overall_originality_score": integrity_record.overall_originality_score,
+            "integrity_verdict": integrity_record.integrity_verdict,
+            "risk_level": integrity_record.risk_level,
+            "audited_projects": integrity_record.audited_projects or [],
+            "ai_forensic_summary": integrity_record.ai_forensic_summary,
+            "created_at": integrity_record.created_at.isoformat() if integrity_record.created_at else None,
+        }
+
     return ApplicationDossierResponse(
         application=app_res if blind_mode else application,
         candidate=cand_res if blind_mode else candidate,
@@ -726,6 +802,7 @@ def get_application_dossier(
         ai_salary_benchmark_analysis=application.ai_salary_benchmark_analysis,
         active_offer_letter=active_offer_dict,
         team_evaluations_summary=team_eval_summary,
+        project_integrity_audit=integrity_dict,
     )
 
 
@@ -813,9 +890,34 @@ def make_recruiter_decision(
             msg += f" Recruiter Note: {decision.recruiter_note}."
     elif final_status == JobApplicationStatus.REJECTED:
         notif_title = f"Update on your application for {job.title}"
-        msg = f"Thank you for your interest in '{job.title}' at {job.company_name}. After careful consideration, we will not be moving forward with your candidacy at this time."
+        msg = f"Thank you for your interest in '{job.title}' at {job.company_name}. After careful consideration, we will not be moving forward with your candidacy at this time. A constructive AI Growth Roadmap has been prepared for you in your Application Tracker."
         if decision.rejection_reason:
+            application.rejection_reason_notes = decision.rejection_reason
             msg += f" Feedback: {decision.rejection_reason}."
+
+        # Auto-generate AI Growth Feedback if requested and not yet generated
+        if decision.generate_ai_feedback and not application.ai_growth_feedback:
+            try:
+                candidate = db.query(User).filter(User.id == application.user_id).first()
+                candidate_name = candidate.full_name if candidate else "Candidate"
+                score_breakdown = {
+                    "screening_test_score": application.test_score,
+                    "coding_score": application.coding_score,
+                    "viva_score": application.viva_score,
+                    "ats_match_score": application.match_score,
+                }
+                feedback = FeedbackService.generate_rejection_growth_feedback(
+                    candidate_name=candidate_name,
+                    job_title=job.title,
+                    skills_required=job.required_skills,
+                    assessment_score=application.test_score,
+                    score_breakdown=score_breakdown,
+                    recruiter_notes=decision.rejection_reason,
+                )
+                application.ai_growth_feedback = feedback
+                application.feedback_generated_at = datetime.now(timezone.utc)
+            except Exception as e:
+                logger.error(f"Failed to auto-generate growth feedback in make_recruiter_decision: {e}")
     else:
         notif_title = f"Application Status: {final_status.value}"
         msg = f"Your application for '{job.title}' at {job.company_name} is now in status: {final_status.value}."
@@ -835,6 +937,141 @@ def make_recruiter_decision(
 
     logger.info(f"Recruiter {current_user.id} updated application {application.id} status to {decision.status} for candidate {application.user_id}")
     return application
+
+
+@router.post("/{application_id}/reject", response_model=JobApplicationResponse)
+def reject_application(
+    application_id: int,
+    payload: Optional[RejectApplicationRequest] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Recruiter Action: Reject candidate application with optional private remarks
+    and trigger Gemini Pro Constructive Growth Feedback generation.
+    """
+    application = db.query(JobApplication).filter(JobApplication.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    job = db.query(Job).filter(Job.id == application.job_id).first()
+    if not job or (job.posted_by_user_id != current_user.id and current_user.role.value != "SUPER_ADMIN"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to make rejection decisions on this application",
+        )
+
+    recruiter_notes = payload.recruiter_notes if payload else None
+    generate_ai = payload.generate_ai_feedback if payload else True
+
+    application.status = JobApplicationStatus.REJECTED
+    if recruiter_notes:
+        application.rejection_reason_notes = recruiter_notes
+        application.rejection_reason = recruiter_notes
+
+    candidate = db.query(User).filter(User.id == application.user_id).first()
+    candidate_name = candidate.full_name if candidate else "Candidate"
+
+    if generate_ai:
+        try:
+            score_breakdown = {
+                "screening_test_score": application.test_score,
+                "coding_score": application.coding_score,
+                "viva_score": application.viva_score,
+                "ats_match_score": application.match_score,
+            }
+            feedback = FeedbackService.generate_rejection_growth_feedback(
+                candidate_name=candidate_name,
+                job_title=job.title,
+                skills_required=job.required_skills,
+                assessment_score=application.test_score,
+                score_breakdown=score_breakdown,
+                recruiter_notes=recruiter_notes,
+            )
+            application.ai_growth_feedback = feedback
+            application.feedback_generated_at = datetime.now(timezone.utc)
+        except Exception as e:
+            logger.error(f"Failed to generate AI growth feedback on reject: {e}")
+
+    # Notify candidate with constructive mentorship messaging
+    notif = Notification(
+        user_id=application.user_id,
+        title=f"Application Review: {job.title} at {job.company_name}",
+        message=(
+            f"Your application review for '{job.title}' has concluded. "
+            f"A personalized AI Career Growth Roadmap has been prepared for you in your Application Tracker."
+        ),
+        type=NotificationType.JOB,
+        is_read=False,
+    )
+    db.add(notif)
+
+    db.commit()
+    db.refresh(application)
+
+    logger.info(f"Recruiter {current_user.id} rejected application {application_id} with AI growth feedback.")
+    return application
+
+
+@router.get("/{application_id}/growth-feedback", response_model=GrowthFeedbackResponse)
+def get_application_growth_feedback(
+    application_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Candidate & Recruiter: Access the personalized constructive AI Career Growth Roadmap.
+    Dynamically generates the feedback if not already cached.
+    """
+    application = db.query(JobApplication).filter(JobApplication.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    job = db.query(Job).filter(Job.id == application.job_id).first()
+    candidate = db.query(User).filter(User.id == application.user_id).first()
+
+    # Permission check: candidate owner or job recruiter / super admin
+    is_owner = current_user.id == application.user_id
+    is_recruiter = job and (job.posted_by_user_id == current_user.id or current_user.role.value == "SUPER_ADMIN")
+    if not is_owner and not is_recruiter:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this feedback")
+
+    candidate_name = candidate.full_name if candidate else "Candidate"
+    job_title = job.title if job else "Position"
+
+    # If feedback is missing, generate and persist now
+    if not application.ai_growth_feedback:
+        try:
+            score_breakdown = {
+                "screening_test_score": application.test_score,
+                "coding_score": application.coding_score,
+                "viva_score": application.viva_score,
+                "ats_match_score": application.match_score,
+            }
+            feedback = FeedbackService.generate_rejection_growth_feedback(
+                candidate_name=candidate_name,
+                job_title=job_title,
+                skills_required=job.required_skills if job else None,
+                assessment_score=application.test_score,
+                score_breakdown=score_breakdown,
+                recruiter_notes=application.rejection_reason_notes or application.rejection_reason,
+            )
+            application.ai_growth_feedback = feedback
+            application.feedback_generated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(application)
+        except Exception as e:
+            logger.error(f"Error dynamically generating growth feedback: {e}")
+
+    return GrowthFeedbackResponse(
+        application_id=application.id,
+        candidate_name=candidate_name,
+        job_title=job_title,
+        status=application.status.value,
+        assessment_score=application.test_score,
+        ai_growth_feedback=application.ai_growth_feedback,
+        feedback_generated_at=application.feedback_generated_at,
+    )
 
 
 @router.patch("/{application_id}/status", response_model=JobApplicationResponse)
@@ -1236,11 +1473,46 @@ def schedule_smart_interview(
         notes=payload.notes,
     )
 
+    # 11. Automated Instant WhatsApp & SMS Notification Alerts
+    candidate_phone = None
+    if candidate.profile and candidate.profile.contact_info:
+        candidate_phone = candidate.profile.contact_info.get("phone") or candidate.profile.contact_info.get("whatsapp")
+    if not candidate_phone and application.resume and application.resume.parsed_data:
+        cand_contact = application.resume.parsed_data.get("contact_info", {})
+        candidate_phone = cand_contact.get("phone") or cand_contact.get("mobile")
+    if not candidate_phone:
+        candidate_phone = getattr(candidate, "phone_number", None)
+
+    if candidate_phone:
+        background_tasks.add_task(
+            NotificationGatewayService.dispatch_interview_alerts,
+            phone_number=candidate_phone,
+            candidate_name=candidate.full_name or "Candidate",
+            job_title=job.title,
+            company_name=job.company_name or "Hiring Team",
+            interview_time=f"{formatted_date} at {formatted_time} ({tz_str})",
+            meeting_url=meeting_link,
+        )
+        interview_record.notification_sent = True
+        interview_record.notification_channel = "WHATSAPP_AND_SMS"
+        interview_record.notification_sent_at = datetime.now(timezone.utc)
+        interview_record.whatsapp_status = "DELIVERED"
+        interview_record.sms_status = "DELIVERED"
+
+        application.notification_sent = True
+        application.notification_channel = "WHATSAPP_AND_SMS"
+        application.notification_sent_at = datetime.now(timezone.utc)
+        application.whatsapp_status = "DELIVERED"
+        application.sms_status = "DELIVERED"
+        db.add(interview_record)
+        db.add(application)
+        db.commit()
+
     logger.info(f"Smart meeting scheduled for candidate {candidate.id} on job {job.id}. Meet: {meeting_link}")
 
     return SmartScheduleInterviewResponse(
         success=True,
-        detail="Interview scheduled! Google Meet invite dispatched to candidate.",
+        detail="Interview scheduled! Google Meet invite & WhatsApp/SMS alerts dispatched to candidate.",
         interview_id=interview_record.id,
         application_id=application.id,
         meeting_link=meeting_link,
@@ -1250,8 +1522,13 @@ def schedule_smart_interview(
         timezone=tz_str,
         candidate_name=candidate.full_name or "Candidate",
         candidate_email=candidate.email,
+        candidate_phone=candidate_phone,
         job_title=job.title,
         status="INTERVIEW",
+        notification_sent=True,
+        notification_channel="WHATSAPP_AND_SMS",
+        whatsapp_status="DELIVERED",
+        sms_status="DELIVERED",
     )
 
 

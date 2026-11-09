@@ -39,8 +39,12 @@ def init_db_and_seed():
                 conn.execute(text("ALTER TABLE jobs ADD COLUMN is_frozen BOOLEAN NOT NULL DEFAULT FALSE"))
             if "is_deleted" not in job_cols:
                 conn.execute(text("ALTER TABLE jobs ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE"))
+            if "sla_review_days" not in job_cols:
+                conn.execute(text("ALTER TABLE jobs ADD COLUMN sla_review_days INT NOT NULL DEFAULT 5"))
+            if "sla_guarantee_enabled" not in job_cols:
+                conn.execute(text("ALTER TABLE jobs ADD COLUMN sla_guarantee_enabled BOOLEAN NOT NULL DEFAULT TRUE"))
 
-            # Check job_applications table columns (Anti-Cheating / Proctoring)
+            # Check job_applications table columns (Anti-Cheating / Proctoring / Growth Feedback / SLA)
             app_cols = [c["name"] for c in insp.get_columns("job_applications")]
             if "tab_switch_count" not in app_cols:
                 conn.execute(text("ALTER TABLE job_applications ADD COLUMN tab_switch_count INT NOT NULL DEFAULT 0"))
@@ -50,6 +54,44 @@ def init_db_and_seed():
                 conn.execute(text("ALTER TABLE job_applications ADD COLUMN proctoring_violations JSON NULL"))
             if "submission_reason" not in app_cols:
                 conn.execute(text("ALTER TABLE job_applications ADD COLUMN submission_reason VARCHAR(50) NOT NULL DEFAULT 'NORMAL'"))
+            if "rejection_reason_notes" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN rejection_reason_notes TEXT NULL"))
+            if "ai_growth_feedback" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN ai_growth_feedback JSON NULL"))
+            if "feedback_generated_at" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN feedback_generated_at DATETIME NULL"))
+            if "sla_deadline" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN sla_deadline DATETIME NULL"))
+            if "sla_breached" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN sla_breached BOOLEAN NOT NULL DEFAULT FALSE"))
+            if "notification_sent" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN notification_sent BOOLEAN NOT NULL DEFAULT FALSE"))
+            if "notification_channel" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN notification_channel VARCHAR(50) NULL DEFAULT 'WHATSAPP_AND_SMS'"))
+            if "notification_sent_at" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN notification_sent_at DATETIME NULL"))
+            if "whatsapp_status" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN whatsapp_status VARCHAR(50) NULL DEFAULT 'SENT'"))
+            if "sms_status" not in app_cols:
+                conn.execute(text("ALTER TABLE job_applications ADD COLUMN sms_status VARCHAR(50) NULL DEFAULT 'SENT'"))
+
+            # Check interviews table columns
+            if "interviews" in insp.get_table_names():
+                interview_cols = [c["name"] for c in insp.get_columns("interviews")]
+                if "notification_sent" not in interview_cols:
+                    conn.execute(text("ALTER TABLE interviews ADD COLUMN notification_sent BOOLEAN NOT NULL DEFAULT FALSE"))
+                if "notification_channel" not in interview_cols:
+                    conn.execute(text("ALTER TABLE interviews ADD COLUMN notification_channel VARCHAR(50) NULL DEFAULT 'WHATSAPP_AND_SMS'"))
+                if "notification_sent_at" not in interview_cols:
+                    conn.execute(text("ALTER TABLE interviews ADD COLUMN notification_sent_at DATETIME NULL"))
+                if "whatsapp_status" not in interview_cols:
+                    conn.execute(text("ALTER TABLE interviews ADD COLUMN whatsapp_status VARCHAR(50) NULL DEFAULT 'SENT'"))
+                if "sms_status" not in interview_cols:
+                    conn.execute(text("ALTER TABLE interviews ADD COLUMN sms_status VARCHAR(50) NULL DEFAULT 'SENT'"))
+                if "whatsapp_message_id" not in interview_cols:
+                    conn.execute(text("ALTER TABLE interviews ADD COLUMN whatsapp_message_id VARCHAR(100) NULL"))
+                if "sms_message_id" not in interview_cols:
+                    conn.execute(text("ALTER TABLE interviews ADD COLUMN sms_message_id VARCHAR(100) NULL"))
 
             # Check candidate_test_submissions table columns
             sub_cols = [c["name"] for c in insp.get_columns("candidate_test_submissions")]
@@ -61,6 +103,15 @@ def init_db_and_seed():
                 conn.execute(text("ALTER TABLE candidate_test_submissions ADD COLUMN proctoring_violations JSON NULL"))
             if "submission_reason" not in sub_cols:
                 conn.execute(text("ALTER TABLE candidate_test_submissions ADD COLUMN submission_reason VARCHAR(50) NOT NULL DEFAULT 'NORMAL'"))
+
+            # Check user_profiles table columns
+            profile_cols = [c["name"] for c in insp.get_columns("user_profiles")]
+            if "projects" not in profile_cols:
+                conn.execute(text("ALTER TABLE user_profiles ADD COLUMN projects JSON NULL"))
+            if "github_username" not in profile_cols:
+                conn.execute(text("ALTER TABLE user_profiles ADD COLUMN github_username VARCHAR(150) NULL"))
+            if "github_data" not in profile_cols:
+                conn.execute(text("ALTER TABLE user_profiles ADD COLUMN github_data JSON NULL"))
 
             # Widen notifications type column
             conn.execute(text("ALTER TABLE notifications MODIFY COLUMN type VARCHAR(50) NOT NULL DEFAULT 'SYSTEM'"))

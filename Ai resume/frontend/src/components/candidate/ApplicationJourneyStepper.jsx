@@ -15,6 +15,7 @@ import {
   AlertCircle,
   ChevronRight,
   ShieldCheck,
+  Sprout,
 } from 'lucide-react';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
@@ -262,23 +263,25 @@ export default function ApplicationJourneyStepper({
 
       {/* Interactive Callout Badges & Next Step Banners */}
       <div className="space-y-2 pt-1">
-        {/* REJECTED / APPLICATION CLOSED BANNER */}
+        {/* CONSTRUCTIVE AI REVIEW & CAREER GROWTH NOTIFICATION */}
         {isRejected && (
-          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-2.5 animate-in fade-in duration-200">
-            <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0 space-y-0.5">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-rose-900 dark:text-rose-100 uppercase tracking-wider text-[11px]">
-                  Application Closed
+          <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50/80 via-indigo-50/60 to-purple-50/70 dark:from-emerald-950/40 dark:via-indigo-950/30 dark:to-slate-900 border border-emerald-200 dark:border-emerald-800/60 text-xs text-slate-800 dark:text-slate-200 flex items-start gap-3 animate-in fade-in duration-200 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+              <Sprout className="w-4 h-4 text-emerald-100" />
+            </div>
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-emerald-950 dark:text-emerald-200 uppercase tracking-wider text-[11px]">
+                  Application Review Concluded
                 </span>
-                <span className="text-[10px] text-rose-600 dark:text-rose-400">
-                  {status === 'STAGE1_FAILED' ? 'Screening Benchmark Not Met' : 'Not Selected'}
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                  📈 AI Growth Feedback Generated
                 </span>
               </div>
-              <p className="text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed">
-                {application.rejection_reason
-                  ? `Recruiter Feedback: "${application.rejection_reason}"`
-                  : 'Thank you for your interest and effort. While this requisition did not advance, your profile is retained for future openings with the hiring team.'}
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                {application.rejection_reason_notes || application.rejection_reason
+                  ? `Recruiter feedback: "${application.rejection_reason_notes || application.rejection_reason}"`
+                  : 'Thank you for your interest and effort. While this opening will not advance further, an empathetic career growth roadmap with actionable study recommendations is available below.'}
               </p>
             </div>
           </div>

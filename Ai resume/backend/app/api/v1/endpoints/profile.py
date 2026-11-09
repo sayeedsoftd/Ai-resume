@@ -24,11 +24,17 @@ def _build_profile_response(user: User, profile: UserProfile) -> UserProfileResp
         headline=profile.headline,
         bio=profile.bio,
         photo_url=profile.photo_url,
+        avatar_url=profile.photo_url,
+        profile_picture=profile.photo_url,
         contact_info=profile.contact_info or {},
         experience=profile.experience or [],
         education=profile.education or [],
         certifications=profile.certifications or [],
         skills=profile.skills or [],
+        projects=profile.projects or [],
+        featured_projects=profile.projects or [],
+        github_username=profile.github_username,
+        github_data=profile.github_data,
         created_at=profile.created_at,
         updated_at=profile.updated_at,
     )
@@ -51,6 +57,9 @@ def get_my_profile(
 
 
 @router.put("/me", response_model=UserProfileResponse)
+@router.put("/candidates/profile", response_model=UserProfileResponse)
+@router.post("/save", response_model=UserProfileResponse)
+@router.put("/save", response_model=UserProfileResponse)
 def update_my_profile(
     profile_in: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
@@ -66,6 +75,15 @@ def update_my_profile(
         db.add(profile)
 
     update_dict = profile_in.model_dump(exclude_unset=True)
+
+    # Map aliases
+    pic = update_dict.pop("profile_picture", None)
+    if pic and not update_dict.get("photo_url"):
+        update_dict["photo_url"] = pic
+
+    fp = update_dict.pop("featured_projects", None)
+    if fp and not update_dict.get("projects"):
+        update_dict["projects"] = fp
 
     # If full_name is provided, update User record
     if "full_name" in update_dict and update_dict["full_name"]:

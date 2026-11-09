@@ -23,12 +23,15 @@ import {
   Clock,
   AlertTriangle,
   Target,
+  Compass,
+  Github,
 } from 'lucide-react';
 import { subscriptionService } from '../services/subscriptionService';
 import JobMatchFinder from './dashboard/JobMatchFinder';
 import ApplicationTracker from './dashboard/ApplicationTracker';
 import ResumeGapAnalyzer from '../components/candidate/ResumeGapAnalyzer';
 import VerifiedBadgeWidget from '../components/candidate/VerifiedBadgeWidget';
+import CareerRoadmapMentor from './candidate/CareerRoadmapMentor';
 
 const Dashboard = ({ defaultTab }) => {
   const { user } = useAuth();
@@ -41,10 +44,13 @@ const Dashboard = ({ defaultTab }) => {
     if (location.pathname === '/candidate/applications' || location.pathname === '/candidate/tracker') {
       return 'tracker';
     }
-    if (defaultTab && ['overview', 'matches', 'tracker', 'gap-analyzer'].includes(defaultTab)) {
+    if (location.pathname === '/candidate/roadmap' || location.pathname === '/candidate/career-roadmap') {
+      return 'roadmap';
+    }
+    if (defaultTab && ['overview', 'matches', 'tracker', 'gap-analyzer', 'roadmap'].includes(defaultTab)) {
       return defaultTab;
     }
-    if (currentTabParam && ['overview', 'matches', 'tracker', 'gap-analyzer'].includes(currentTabParam)) {
+    if (currentTabParam && ['overview', 'matches', 'tracker', 'gap-analyzer', 'roadmap'].includes(currentTabParam)) {
       return currentTabParam;
     }
     return 'overview';
@@ -60,7 +66,9 @@ const Dashboard = ({ defaultTab }) => {
   useEffect(() => {
     if (location.pathname === '/candidate/applications' || location.pathname === '/candidate/tracker') {
       setActiveTab('tracker');
-    } else if (currentTabParam && ['overview', 'matches', 'tracker', 'gap-analyzer'].includes(currentTabParam)) {
+    } else if (location.pathname === '/candidate/roadmap' || location.pathname === '/candidate/career-roadmap') {
+      setActiveTab('roadmap');
+    } else if (currentTabParam && ['overview', 'matches', 'tracker', 'gap-analyzer', 'roadmap'].includes(currentTabParam)) {
       setActiveTab(currentTabParam);
     } else if (!currentTabParam && defaultTab) {
       setActiveTab(defaultTab);
@@ -198,6 +206,11 @@ const Dashboard = ({ defaultTab }) => {
                 <Sparkles className="w-4 h-4 mr-1.5 text-indigo-600" /> Live Resume Builder
               </Button>
             </Link>
+            <Link to="/profile">
+              <Button variant="secondary" size="sm" className="bg-white/10 text-white hover:bg-white/20 border-white/20">
+                <Github className="w-4 h-4 mr-1.5 text-cyan-300" /> 1-Click GitHub Sync
+              </Button>
+            </Link>
             <Link to="/resumes">
               <Button variant="secondary" size="sm" className="bg-white/10 text-white hover:bg-white/20 border-white/20">
                 <Upload className="w-4 h-4 mr-1.5" /> Upload File
@@ -255,6 +268,17 @@ const Dashboard = ({ defaultTab }) => {
             <Target className="w-4 h-4 text-emerald-300" />
             AI Resume Gap Analyzer
           </button>
+          <button
+            onClick={() => handleTabChange('roadmap')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'roadmap'
+                ? 'bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Compass className="w-4 h-4 text-amber-300" />
+            AI Career Roadmap Mentor
+          </button>
         </div>
 
         {/* TAB CONTENT: Find Perfect Job Matches */}
@@ -275,6 +299,13 @@ const Dashboard = ({ defaultTab }) => {
         {activeTab === 'gap-analyzer' && (
           <ErrorBoundary title="Failed to render AI Resume Gap Analyzer">
             <ResumeGapAnalyzer />
+          </ErrorBoundary>
+        )}
+
+        {/* TAB CONTENT: AI Career Roadmap Mentor */}
+        {activeTab === 'roadmap' && (
+          <ErrorBoundary title="Failed to render AI Career Roadmap Mentor">
+            <CareerRoadmapMentor />
           </ErrorBoundary>
         )}
 
@@ -313,7 +344,10 @@ const Dashboard = ({ defaultTab }) => {
             {/* Main Grid: Activity & Featured Jobs */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
-                <RecentActivity applications={safeApplications} />
+                <RecentActivity 
+                  applications={safeApplications} 
+                  onOpenTracker={() => handleTabChange('tracker')} 
+                />
 
                 {/* Featured Jobs */}
                 <Card>

@@ -19,12 +19,15 @@ from app.schemas.job import (
     SuperAdminJobMetrics,
     JobMatchResult,
     MatchedJobItem,
+    AIJobDescriptionRequest,
+    AIJobDescriptionResponse,
 )
 from app.schemas.application import JobApplicationResponse
 from app.services.matcher import JobMatchService
 from app.services.job_matcher import JobMatcherService
 from app.services.gemini_service import GeminiService
 from app.services.salary_benchmarker import SalaryBenchmarkService
+from app.services.jd_generator_service import JobDescriptionGeneratorService
 
 router = APIRouter()
 
@@ -132,6 +135,35 @@ def list_jobs(
     return query.order_by(Job.created_at.desc()).offset(skip).limit(limit).all()
 
 
+@router.post("/generate-ai-jd", response_model=AIJobDescriptionResponse)
+def generate_ai_job_description(
+    payload: AIJobDescriptionRequest,
+    current_user: User = Depends(require_subscriber_or_admin),
+):
+    """
+    1-Click AI Job Description Generator & Optimizer using Google Gemini Pro.
+    Generates structured, market-aligned job requisition descriptions, responsibilities,
+    skills, salary benchmarks, and benefits from minimal keywords.
+    """
+    if not payload.job_title or not payload.job_title.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Job title is required to generate a job description.",
+        )
+
+    result = JobDescriptionGeneratorService.generate_job_description(
+        job_title=payload.job_title.strip(),
+        experience_level=payload.experience_level or "MID",
+        industry=payload.industry or "Software Engineering",
+        keywords=payload.keywords,
+        workplace_type=payload.workplace_type or "ON_SITE",
+        tone=payload.tone or "Professional",
+        target_language=payload.target_language or "en",
+    )
+
+    return AIJobDescriptionResponse(**result)
+
+
 @router.post("/", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 def create_job(
     job_in: JobCreate,
@@ -181,6 +213,8 @@ def create_job(
         passing_score=job_in.passing_score if job_in.passing_score is not None else 70.0,
         has_manual_stage=bool(job_in.has_manual_stage),
         manual_questions=_sanitize_and_cap_manual_questions(job_in.manual_questions) if job_in.has_manual_stage else None,
+        sla_review_days=int(job_in.sla_review_days or 5),
+        sla_guarantee_enabled=bool(job_in.sla_guarantee_enabled if job_in.sla_guarantee_enabled is not None else True),
         views_count=0,
     )
     db.add(job)

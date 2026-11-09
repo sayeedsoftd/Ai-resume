@@ -30,6 +30,9 @@ class UserResponse(BaseModel):
     is_verified_badge: bool
     subscription_status: Optional[str] = "NONE"
     subscription_expires_at: Optional[datetime] = None
+    photo_url: Optional[str] = None
+    avatar_url: Optional[str] = None
+    profile_picture: Optional[str] = None
     company_name: Optional[str] = None
     company_logo_url: Optional[str] = None
     company_website: Optional[str] = None
@@ -87,11 +90,17 @@ class UserProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     headline: Optional[str] = None
     bio: Optional[str] = None
+    photo_url: Optional[str] = None
+    profile_picture: Optional[str] = None
     contact_info: Optional[Dict[str, Any]] = None
     experience: Optional[List[Dict[str, Any]]] = None
     education: Optional[List[Dict[str, Any]]] = None
     certifications: Optional[List[Dict[str, Any]]] = None
     skills: Optional[List[str]] = None
+    projects: Optional[List[Dict[str, Any]]] = None
+    featured_projects: Optional[List[Dict[str, Any]]] = None
+    github_username: Optional[str] = None
+    github_data: Optional[Dict[str, Any]] = None
 
 
 class UserProfileResponse(BaseModel):
@@ -104,11 +113,17 @@ class UserProfileResponse(BaseModel):
     headline: Optional[str] = None
     bio: Optional[str] = None
     photo_url: Optional[str] = None
+    avatar_url: Optional[str] = None
+    profile_picture: Optional[str] = None
     contact_info: Optional[Dict[str, Any]] = None
     experience: Optional[List[Dict[str, Any]]] = None
     education: Optional[List[Dict[str, Any]]] = None
     certifications: Optional[List[Dict[str, Any]]] = None
     skills: Optional[List[str]] = None
+    projects: Optional[List[Dict[str, Any]]] = None
+    featured_projects: Optional[List[Dict[str, Any]]] = None
+    github_username: Optional[str] = None
+    github_data: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 

@@ -46,6 +46,16 @@ class JobApplication(Base):
     meeting_link = Column(String(500), nullable=True)    # Google Meet, Zoom, or office location
     recruiter_notes = Column(Text, nullable=True)        # Feedback or scheduling notes from recruiter
     rejection_reason = Column(Text, nullable=True)       # Rejection rationale
+    rejection_reason_notes = Column(Text, nullable=True) # Internal recruiter remarks
+    ai_growth_feedback = Column(JSON, nullable=True)     # Stores structured Gemini career growth roadmap
+    feedback_generated_at = Column(DateTime, nullable=True) # Timestamp of AI feedback generation
+
+    # Automated WhatsApp & SMS Notification Alerts Tracking
+    notification_sent = Column(Boolean, default=False, nullable=False)
+    notification_channel = Column(String(50), default="WHATSAPP_AND_SMS", nullable=True)
+    notification_sent_at = Column(DateTime, nullable=True)
+    whatsapp_status = Column(String(50), default="SENT", nullable=True)
+    sms_status = Column(String(50), default="SENT", nullable=True)
 
     # Recruiter View Tracking & Journey Metrics
     viewed_by_recruiter = Column(Boolean, default=False, nullable=False, index=True)
@@ -69,6 +79,10 @@ class JobApplication(Base):
     # 60-Second Video Pitch (Elevator Video)
     video_pitch_url = Column(String(500), nullable=True)
 
+    # Anti-Ghosting Hiring SLA Tracking
+    sla_deadline = Column(DateTime, nullable=True, index=True) # applied_at + job.sla_review_days
+    sla_breached = Column(Boolean, default=False, nullable=False, index=True)
+
     # Dynamic AI Adaptive Testing Metrics
     adaptive_ability_rating = Column(String(50), nullable=True)
     adaptive_theta_score = Column(Float, nullable=True, default=50.0)
@@ -90,6 +104,7 @@ class JobApplication(Base):
     test_submission = relationship("CandidateTestSubmission", foreign_keys=[candidate_test_submission_id], post_update=True)
     offer_letters = relationship("OfferLetter", back_populates="application", cascade="all, delete-orphan", order_by="OfferLetter.created_at.desc()")
     evaluation_notes = relationship("CandidateEvaluationNote", back_populates="application", cascade="all, delete-orphan", order_by="CandidateEvaluationNote.created_at.desc()")
+    project_integrity_audit = relationship("ProjectIntegrityAudit", back_populates="application", uselist=False, cascade="all, delete-orphan")
 
     @property
     def mcq_score(self) -> float | None:
@@ -106,6 +121,12 @@ class JobApplication(Base):
     __table_args__ = (
         UniqueConstraint("job_id", "user_id", name="uq_user_job_application"),
     )
+
+    @property
+    def sla_review_days(self) -> int:
+        if self.job and hasattr(self.job, "sla_review_days") and self.job.sla_review_days:
+            return self.job.sla_review_days
+        return 5
 
     @property
     def salary_budget_status(self):

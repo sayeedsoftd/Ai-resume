@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { useLanguage } from '../../context/LanguageContext';
 import {
   Sparkles,
   ShieldCheck,
@@ -39,6 +40,7 @@ const Navbar = () => {
   } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const { notifications, unreadCount, markAsRead } = useNotifications();
+  const { currentLanguage, changeLanguage, t } = useLanguage();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
@@ -73,7 +75,7 @@ const Navbar = () => {
         <Link to="/" className="flex items-center gap-2.5">
           
           <span className="font-bold text-lg bg-gradient-to-r from-slate-900 via-indigo-950 to-indigo-700 dark:from-white dark:via-indigo-200 dark:to-indigo-400 bg-clip-text text-transparent">
-            ResumeAI Match
+            HireSphere
           </span>
         </Link>
 
@@ -83,30 +85,51 @@ const Navbar = () => {
             to={findJobsTarget}
             className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1.5"
           >
-            <Briefcase className="w-4 h-4" /> Find Jobs
+            <Briefcase className="w-4 h-4" /> {t('nav.find_jobs', 'Find Jobs')}
           </Link>
           <Link
             to="/resumes"
             className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1.5"
           >
-            <FileText className="w-4 h-4" /> ATS Scanner
+            <FileText className="w-4 h-4" /> {t('nav.ats_scanner', 'ATS Scanner')}
           </Link>
           <Link
             to="/resume-builder"
             className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1.5"
           >
-            <FileSpreadsheet className="w-4 h-4 text-indigo-500" /> Resume Builder
+            <FileSpreadsheet className="w-4 h-4 text-indigo-500" /> {t('nav.resume_builder', 'Resume Builder')}
           </Link>
           <Link
             to="/profile"
             className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1.5"
           >
-            <User className="w-4 h-4" /> Profile & CV
+            <User className="w-4 h-4" /> {t('nav.profile_cv', 'Profile & CV')}
           </Link>
         </nav>
 
-        {/* Right Section: Theme Toggle & Profile Dropdown */}
-        <div className="flex items-center gap-3">
+        {/* Right Section: Language Selector, Theme Toggle & Profile Dropdown */}
+        <div className="flex items-center gap-2.5">
+          {/* Universal Multi-Language Dropdown */}
+          <div className="relative">
+            <select
+              value={currentLanguage}
+              onChange={(e) => changeLanguage(e.target.value)}
+              aria-label="Universal Language Selector"
+              className="px-2.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition cursor-pointer shadow-xs"
+            >
+              <option value="en">🇺🇸 English</option>
+              <option value="bn">🇧🇩 বাংলা (Bengali)</option>
+              <option value="hi">🇮🇳 हिन्दी (Hindi)</option>
+              <option value="ar">🇸🇦 العربية (Arabic)</option>
+              <option value="es">🇪🇸 Español (Spanish)</option>
+              <option value="fr">🇫🇷 Français (French)</option>
+              <option value="de">🇩🇪 Deutsch (German)</option>
+              <option value="zh">🇨🇳 中文 (Chinese)</option>
+              <option value="ja">🇯🇵 日本語 (Japanese)</option>
+              <option value="ur">🇵🇰 اردو (Urdu)</option>
+            </select>
+          </div>
+
           {/* Theme Toggle Button */}
           <button
             onClick={toggleTheme}
@@ -197,8 +220,20 @@ const Navbar = () => {
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center gap-2.5 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 bg-white dark:bg-slate-800 transition-all focus:outline-none"
               >
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                  {user?.full_name ? user.full_name[0].toUpperCase() : 'U'}
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden">
+                  {user?.photo_url || user?.avatar_url || user?.profile_picture ? (
+                    <img
+                      src={(user.photo_url || user.avatar_url || user.profile_picture).startsWith('http')
+                        ? (user.photo_url || user.avatar_url || user.profile_picture)
+                        : `http://localhost:8000${user.photo_url || user.avatar_url || user.profile_picture}`}
+                      alt={user?.full_name || 'Avatar'}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : user?.full_name ? (
+                    user.full_name[0].toUpperCase()
+                  ) : (
+                    'U'
+                  )}
                 </div>
                 <div className="hidden sm:flex flex-col text-left pr-1">
                   <div className="flex items-center gap-1">

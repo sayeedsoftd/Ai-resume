@@ -59,6 +59,16 @@ export const jobService = {
     return response.data;
   },
 
+  async auditApplicationProjects(applicationId) {
+    const response = await api.post(`/applications/${applicationId}/audit-projects`);
+    return response.data;
+  },
+
+  async getApplicationIntegrityAudit(applicationId) {
+    const response = await api.get(`/applications/${applicationId}/integrity-audit`);
+    return response.data;
+  },
+
   async makeRecruiterDecision(applicationId, decisionData) {
     const response = await api.patch(`/applications/${applicationId}/decision`, decisionData);
     return response.data;
@@ -169,6 +179,32 @@ export const jobService = {
     return response.data;
   },
 
+  // Candidate Inquiries & Official Interview Invites
+  async getCandidateInquiries() {
+    const response = await api.get('/candidates/inquiries');
+    return response.data;
+  },
+
+  async getCandidateUnreadInquiriesCount() {
+    const response = await api.get('/candidates/inquiries/unread-count');
+    return response.data;
+  },
+
+  async markCandidateInquiryRead(inquiryId) {
+    const response = await api.patch(`/candidates/inquiries/${inquiryId}/read`);
+    return response.data;
+  },
+
+  async replyToCandidateInquiry(inquiryId, payload) {
+    const response = await api.post(`/candidates/inquiries/${inquiryId}/reply`, payload);
+    return response.data;
+  },
+
+  async actOnCandidateInquiry(inquiryId, payload) {
+    const response = await api.post(`/candidates/inquiries/${inquiryId}/action`, payload);
+    return response.data;
+  },
+
   async getRecruiterInquiries() {
     const response = await api.get('/recruiter/inquiries');
     return response.data;
@@ -263,6 +299,31 @@ export const jobService = {
 
   async deleteApplicationEvaluation(applicationId, noteId) {
     const response = await api.delete(`/applications/${applicationId}/evaluations/${noteId}`);
+    return response.data;
+  },
+
+  async generateAIJobDescription(payload) {
+    const response = await api.post('/jobs/generate-ai-jd', payload);
+    return response.data;
+  },
+
+  async rejectApplication(applicationId, payload = {}) {
+    const response = await api.post(`/applications/${applicationId}/reject`, payload);
+    return response.data;
+  },
+
+  async getApplicationGrowthFeedback(applicationId) {
+    const response = await api.get(`/applications/${applicationId}/growth-feedback`);
+    return response.data;
+  },
+
+  async searchTalentPool(payload = {}) {
+    const response = await api.post('/recruiters/talent-search', payload);
+    return response.data;
+  },
+
+  async sendInstantCandidateInvite(candidateId, payload) {
+    const response = await api.post(`/recruiters/talent-search/${candidateId}/instant-invite`, payload);
     return response.data;
   },
 };

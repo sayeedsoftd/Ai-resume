@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import {
   ShieldCheck,
   Award,
@@ -27,6 +29,8 @@ export default function VerifyTalent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const certificateRef = useRef(null);
 
   useEffect(() => {
     async function verifyCredential() {
@@ -78,6 +82,73 @@ export default function VerifyTalent() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdf = async () => {
+    const element = certificateRef.current;
+    if (!element) return;
+
+    try {
+      setDownloadingPdf(true);
+
+      // Render certificate card to high-resolution canvas with full fidelity
+      const canvas = await html2canvas(element, {
+        scale: 2, // 2x resolution for ultra-crisp typography, badges & borders
+        useCORS: true, // Allow external QR code image loading
+        allowTaint: true,
+        backgroundColor: '#020617', // Match dark slate-950 container
+        logging: false,
+        ignoreElements: (el) => el.classList && el.classList.contains('no-print'),
+      });
+
+      const imgData = canvas.toDataURL('image/png', 1.0);
+
+      // Create landscape A4 PDF document
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      // Maintain aspect ratio with clean 10mm margins
+      const margin = 10;
+      const maxW = pageWidth - margin * 2;
+      const maxH = pageHeight - margin * 2;
+
+      const canvasRatio = canvas.width / canvas.height;
+      let renderWidth = maxW;
+      let renderHeight = maxW / canvasRatio;
+
+      if (renderHeight > maxH) {
+        renderHeight = maxH;
+        renderWidth = maxH * canvasRatio;
+      }
+
+      // Center the certificate perfectly on the landscape A4 page
+      const posX = (pageWidth - renderWidth) / 2;
+      const posY = (pageHeight - renderHeight) / 2;
+
+      // Dark background fill to guarantee seamless edge coverage
+      pdf.setFillColor(2, 6, 23); // #020617
+      pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+
+      pdf.addImage(imgData, 'PNG', posX, posY, renderWidth, renderHeight, '', 'FAST');
+
+      const rawName = badgeData?.candidate_name || 'Abu Sayeed';
+      const cleanName = rawName.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+      const filename = `${cleanName || 'Abu_Sayeed'}_Assessment_Certificate.pdf`;
+
+      pdf.save(filename);
+    } catch (err) {
+      console.error('PDF export error:', err);
+      // Graceful fallback to browser print if canvas generation fails
+      window.print();
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   if (loading) {
@@ -184,11 +255,25 @@ export default function VerifyTalent() {
             <Printer className="w-3.5 h-3.5" />
             Print Certificate
           </Button>
+
+          <button
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 flex items-center gap-1.5 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>{downloadingPdf ? 'Exporting PDF...' : 'Download PDF'}</span>
+          </button>
         </div>
       </div>
 
       {/* Main Official Certificate Card */}
-      <div className="max-w-4xl mx-auto bg-gradient-to-b from-slate-900 to-slate-950 border border-indigo-500/30 rounded-3xl p-6 sm:p-10 shadow-2xl shadow-indigo-950/60 relative overflow-hidden print-certificate-container">
+      <div
+        ref={certificateRef}
+        className="max-w-4xl mx-auto bg-gradient-to-b from-slate-900 to-slate-950 border border-indigo-500/30 rounded-3xl p-6 sm:p-10 shadow-2xl shadow-indigo-950/60 relative overflow-hidden print-certificate-container"
+      >
         {/* Decorative background glow */}
         <div className="absolute -top-32 -right-32 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -305,6 +390,7 @@ export default function VerifyTalent() {
           {/* Right: Dynamic QR Code */}
           <div className="flex items-center gap-3.5 bg-slate-950/80 p-3 rounded-2xl border border-slate-800 shrink-0">
             <img
+              crossOrigin="anonymous"
               src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(liveUrl)}`}
               alt="Verification QR Code"
               className="w-20 h-20 rounded-xl bg-white p-1 border border-slate-700"

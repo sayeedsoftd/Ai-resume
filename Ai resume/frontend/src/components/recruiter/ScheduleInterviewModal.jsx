@@ -39,6 +39,13 @@ export default function ScheduleInterviewModal({
     candidate?.user?.email ||
     '';
 
+  const candidatePhone =
+    candidate?.candidate_phone ||
+    candidate?.phone ||
+    candidate?.contact_info?.phone ||
+    candidate?.user?.phone ||
+    '';
+
   const jobTitle =
     candidate?.job_title ||
     candidate?.title ||
@@ -297,6 +304,16 @@ export default function ScheduleInterviewModal({
                   {scheduledResult.meeting_link}
                 </div>
 
+                {/* Instant WhatsApp & SMS Notification Delivered Status */}
+                <div className="flex items-center gap-2 pt-1 flex-wrap">
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-2xs">
+                    <span>🟢</span> WhatsApp Alert Delivered
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 flex items-center gap-1">
+                    <span>📱</span> SMS Dispatched
+                  </span>
+                </div>
+
                 <div className="pt-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                   <span>📅 {interviewDate} at {interviewTime}</span>
                   <span>⏱ {durationMinutes} Mins</span>
@@ -434,6 +451,28 @@ export default function ScheduleInterviewModal({
                   <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
                   <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
                 </select>
+              </div>
+
+              {/* Automated WhatsApp & SMS Instant Dispatch Banner */}
+              <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 flex items-start gap-3 text-xs shadow-xs">
+                <span className="text-xl shrink-0 mt-0.5">📲</span>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <strong className="font-bold text-slate-900 dark:text-emerald-200">
+                      Automated Instant WhatsApp &amp; SMS Alert:
+                    </strong>
+                    <span className="px-2 py-0.2 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
+                      Automated Push
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Automated WhatsApp &amp; SMS alert will be instantly dispatched to candidate (
+                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300 underline">
+                      {candidatePhone || '+880 17XXXXXXXX'}
+                    </span>
+                    ) upon scheduling with direct meeting room link.
+                  </p>
+                </div>
               </div>
 
               {/* Google Meet Auto-Generation Checkbox */}

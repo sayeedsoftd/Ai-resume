@@ -7,11 +7,17 @@ class ProfileBase(BaseModel):
     headline: Optional[str] = None
     bio: Optional[str] = None
     photo_url: Optional[str] = None
+    avatar_url: Optional[str] = None
+    profile_picture: Optional[str] = None
     contact_info: Optional[Dict[str, Any]] = None
     experience: Optional[List[Dict[str, Any]]] = None
     education: Optional[List[Dict[str, Any]]] = None
     certifications: Optional[List[Dict[str, Any]]] = None
     skills: Optional[List[str]] = None
+    projects: Optional[List[Dict[str, Any]]] = None
+    featured_projects: Optional[List[Dict[str, Any]]] = None
+    github_username: Optional[str] = None
+    github_data: Optional[Dict[str, Any]] = None
 
 
 class ProfileCreate(ProfileBase):

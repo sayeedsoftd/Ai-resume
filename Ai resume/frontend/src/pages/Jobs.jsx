@@ -378,6 +378,14 @@ const Jobs = () => {
                         {expBadgeText}
                       </span>
 
+                      {/* Anti-Ghosting SLA Guarantee */}
+                      {job.sla_guarantee_enabled !== false && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-cyan-50 text-cyan-800 dark:bg-cyan-950/50 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800/60">
+                          <span>🛡️</span>
+                          {job.sla_review_days || 5}d Review SLA
+                        </span>
+                      )}
+
                       {/* Location */}
                       <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
                         <MapPin className="w-3 h-3 text-slate-400" /> {job.location || 'Remote'}

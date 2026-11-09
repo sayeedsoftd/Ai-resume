@@ -44,6 +44,9 @@ class JobApplicationResponse(BaseModel):
     meeting_link: Optional[str] = None
     recruiter_notes: Optional[str] = None
     rejection_reason: Optional[str] = None
+    rejection_reason_notes: Optional[str] = None
+    ai_growth_feedback: Optional[Dict[str, Any]] = None
+    feedback_generated_at: Optional[datetime] = None
     viewed_by_recruiter: Optional[bool] = False
     viewed_at: Optional[datetime] = None
     expected_salary: Optional[float] = None
@@ -71,6 +74,19 @@ class JobApplicationResponse(BaseModel):
     hiring_consensus: Optional[str] = None
     adaptive_skill_curve: Optional[List[Dict[str, Any]]] = None
     adaptive_tier_distribution: Optional[Dict[str, Any]] = None
+    
+    # Anti-Ghosting Hiring SLA Tracking
+    sla_deadline: Optional[datetime] = None
+    sla_breached: Optional[bool] = False
+    sla_review_days: Optional[int] = 5
+
+    # Automated WhatsApp & SMS Notification Alerts Tracking
+    notification_sent: Optional[bool] = False
+    notification_channel: Optional[str] = None
+    notification_sent_at: Optional[datetime] = None
+    whatsapp_status: Optional[str] = None
+    sms_status: Optional[str] = None
+
     applied_at: datetime
     updated_at: datetime
     
@@ -89,6 +105,22 @@ class RecruiterDecisionRequest(BaseModel):
     meeting_link: Optional[str] = None
     recruiter_note: Optional[str] = None
     rejection_reason: Optional[str] = None
+    generate_ai_feedback: Optional[bool] = True
+
+
+class RejectApplicationRequest(BaseModel):
+    recruiter_notes: Optional[str] = None
+    generate_ai_feedback: bool = True
+
+
+class GrowthFeedbackResponse(BaseModel):
+    application_id: int
+    candidate_name: str
+    job_title: str
+    status: str
+    assessment_score: Optional[float] = None
+    ai_growth_feedback: Optional[Dict[str, Any]] = None
+    feedback_generated_at: Optional[datetime] = None
 
 
 class ScheduleInterviewRequest(BaseModel):
@@ -125,8 +157,13 @@ class SmartScheduleInterviewResponse(BaseModel):
     timezone: str
     candidate_name: str
     candidate_email: str
+    candidate_phone: Optional[str] = None
     job_title: str
     status: str
+    notification_sent: bool = True
+    notification_channel: str = "WHATSAPP_AND_SMS"
+    whatsapp_status: str = "DELIVERED"
+    sms_status: str = "DELIVERED"
 
 
 
@@ -161,6 +198,7 @@ class ApplicationDossierResponse(BaseModel):
     ai_salary_benchmark_analysis: Optional[Dict[str, Any]] = None
     active_offer_letter: Optional[Dict[str, Any]] = None
     team_evaluations_summary: Optional[Dict[str, Any]] = None
+    project_integrity_audit: Optional[Dict[str, Any]] = None
 
 
 class ShortlistedCandidateItem(BaseModel):

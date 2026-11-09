@@ -48,6 +48,26 @@ class User(Base):
         cascade="all, delete-orphan",
         order_by="desc(PaymentTransaction.created_at)",
     )
+    project_integrity_audits = relationship(
+        "ProjectIntegrityAudit",
+        back_populates="candidate",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email={self.email} role={self.role}>"
+
+    @property
+    def photo_url(self) -> str | None:
+        if self.profile and self.profile.photo_url:
+            return self.profile.photo_url
+        return None
+
+    @property
+    def avatar_url(self) -> str | None:
+        return self.photo_url
+
+    @property
+    def profile_picture(self) -> str | None:
+        return self.photo_url
+

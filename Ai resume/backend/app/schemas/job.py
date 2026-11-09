@@ -28,6 +28,10 @@ class JobBase(BaseModel):
     has_manual_stage: Optional[bool] = False
     manual_questions: Optional[Any] = None # {"mcqs": [...], "written": [...]} or list of questions
 
+    # Anti-Ghosting Hiring SLA Commitment
+    sla_review_days: Optional[int] = 5
+    sla_guarantee_enabled: Optional[bool] = True
+
 
 class JobCreate(JobBase):
     pass
@@ -54,6 +58,8 @@ class JobUpdate(BaseModel):
     passing_score: Optional[float] = None
     has_manual_stage: Optional[bool] = None
     manual_questions: Optional[Any] = None
+    sla_review_days: Optional[int] = None
+    sla_guarantee_enabled: Optional[bool] = None
 
 
 class JobResponse(JobBase):
@@ -119,3 +125,27 @@ class MatchedJobItem(BaseModel):
     is_shortlisted: Optional[bool] = False
     score_breakdown: Optional[Dict[str, Any]] = None
     matched_skills: List[str]
+
+
+class AIJobDescriptionRequest(BaseModel):
+    job_title: str
+    experience_level: Optional[str] = "MID"
+    industry: Optional[str] = "Software Engineering"
+    keywords: Optional[str] = None
+    workplace_type: Optional[str] = "ON_SITE"
+    tone: Optional[str] = "Professional"
+    target_language: Optional[str] = "en"
+
+
+class AIJobDescriptionResponse(BaseModel):
+    job_title: str
+    role_overview: str
+    responsibilities: List[str]
+    required_skills: List[str]
+    bonus_skills: List[str] = []
+    soft_skills: List[str] = []
+    experience_years: int = 2
+    recommended_min_salary: float = 40000.0
+    recommended_max_salary: float = 65000.0
+    suggested_benefits: List[str] = []
+    full_formatted_description: str

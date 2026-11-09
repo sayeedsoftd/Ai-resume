@@ -1,6 +1,7 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import AppLayout from './components/layout/AppLayout';
@@ -23,10 +24,14 @@ import RecruiterPanel from './pages/recruiter/RecruiterPanel';
 import ShortlistedCandidates from './pages/recruiter/ShortlistedCandidates';
 import CandidateInquiries from './pages/recruiter/CandidateInquiries';
 import CandidateMessages from './pages/candidate/CandidateMessages';
+import ReceivedMessages from './pages/candidate/ReceivedMessages';
+import RecruiterInquiries from './pages/candidate/RecruiterInquiries';
 import PricingCheckout from './pages/subscription/PricingCheckout';
 import VerifyTalent from './pages/public/VerifyTalent';
 import CompanyProfile from './pages/public/CompanyProfile';
 import CompanyProfileSettings from './pages/recruiter/CompanyProfileSettings';
+import TalentSearch from './pages/recruiter/TalentSearch';
+import DailySkillDrill from './pages/candidate/DailySkillDrill';
 import NotFound from './pages/NotFound';
 
 // Protected Route Guard
@@ -53,6 +58,37 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 };
 
 function AppRoutes() {
+  const location = useLocation();
+
+  // Ensure Google Translate cookie and direction persist across route navigations
+  useEffect(() => {
+    const saved = localStorage.getItem('app_selected_locale') || localStorage.getItem('app_locale');
+    if (saved && saved !== 'en') {
+      const langMap = {
+        en: 'en',
+        bn: 'bn',
+        hi: 'hi',
+        ar: 'ar',
+        es: 'es',
+        fr: 'fr',
+        de: 'de',
+        zh: 'zh-CN',
+        ja: 'ja',
+        ur: 'ur',
+      };
+      const target = langMap[saved] || saved;
+      const hostname = window.location.hostname;
+      document.cookie = `googtrans=/en/${target}; path=/; domain=${hostname};`;
+      document.cookie = `googtrans=/en/${target}; path=/;`;
+
+      if (['ar', 'ur'].includes(target)) {
+        document.documentElement.dir = 'rtl';
+      } else {
+        document.documentElement.dir = 'ltr';
+      }
+    }
+  }, [location.pathname]);
+
   return (
     <Routes>
       {/* Public Pages */}
@@ -176,6 +212,34 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/career-roadmap"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Dashboard defaultTab="roadmap" />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/roadmap"
+        element={<Navigate to="/career-roadmap" replace />}
+      />
+      <Route
+        path="/daily-quiz"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <DailySkillDrill />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/daily-quiz"
+        element={<Navigate to="/daily-quiz" replace />}
+      />
+      <Route
         path="/analyzer"
         element={<Navigate to="/gap-analyzer" replace />}
       />
@@ -222,14 +286,34 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <CandidateMessages />
+              <ReceivedMessages />
             </DashboardLayout>
           </ProtectedRoute>
         }
       />
       <Route
         path="/messages"
-        element={<Navigate to="/candidate/messages" replace />}
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <ReceivedMessages />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recruiter-inquiries"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <RecruiterInquiries />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/inquiries"
+        element={<Navigate to="/recruiter-inquiries" replace />}
       />
       <Route
         path="/candidate/applications"
@@ -304,6 +388,20 @@ function AppRoutes() {
       <Route
         path="/recruiter/company"
         element={<Navigate to="/recruiter/company-profile" replace />}
+      />
+      <Route
+        path="/recruiter/talent-search"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <TalentSearch />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/talent-search"
+        element={<Navigate to="/recruiter/talent-search" replace />}
       />
 
       <Route
@@ -384,14 +482,16 @@ function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
-        <AuthProvider>
-          <NotificationProvider>
-            <ErrorBoundary title="Application failed to load">
-              <AppRoutes />
-              <NotificationModal />
-            </ErrorBoundary>
-          </NotificationProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <NotificationProvider>
+              <ErrorBoundary title="Application failed to load">
+                <AppRoutes />
+                <NotificationModal />
+              </ErrorBoundary>
+            </NotificationProvider>
+          </AuthProvider>
+        </LanguageProvider>
       </ThemeProvider>
     </BrowserRouter>
   );

@@ -14,3 +14,10 @@ from app.models.notification import Notification  # noqa: E402, F401
 from app.models.assessment import JobAssessment, CandidateTestSubmission  # noqa: E402, F401
 from app.models.offer_letter import OfferLetter  # noqa: E402, F401
 from app.models.recruiter_note import CandidateEvaluationNote  # noqa: E402, F401
+from app.models.chat_message import ChatMessage  # noqa: E402, F401
+from app.models.candidate_message import CandidateMessage  # noqa: E402, F401
+from app.models.daily_quiz import UserSkillProgress, DailyQuizSession  # noqa: E402, F401
+from app.models.career_roadmap import CandidateCareerRoadmap  # noqa: E402, F401
+from app.models.project_integrity import ProjectIntegrityAudit  # noqa: E402, F401
+from app.models.subscription import SubscriptionPlan, SystemPaymentSettings, PaymentTransaction  # noqa: E402, F401
+from app.models.verified_badge import VerifiedBadge  # noqa: E402, F401

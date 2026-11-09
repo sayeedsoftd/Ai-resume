@@ -9,11 +9,14 @@ import {
   Sliders,
   FileQuestion,
   Edit3,
+  Wand2,
+  RefreshCw,
 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import { jobService } from '../../services/jobService';
+import AISmartJobDescriptionAssistant from './AISmartJobDescriptionAssistant';
 
 export default function CreateJobModal({
   isOpen,
@@ -47,8 +50,13 @@ export default function CreateJobModal({
   // 3. Interactive Question Builder State
   const [manualQuestions, setManualQuestions] = useState([]);
 
+  // 4. Anti-Ghosting Hiring SLA Tracking
+  const [slaReviewDays, setSlaReviewDays] = useState(5);
+  const [slaGuaranteeEnabled, setSlaGuaranteeEnabled] = useState(true);
+
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isDraftingJD, setIsDraftingJD] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -77,6 +85,8 @@ export default function CreateJobModal({
             : 70
         );
         setHasManualStage(Boolean(initialData.has_manual_stage));
+        setSlaReviewDays(initialData.sla_review_days !== undefined && initialData.sla_review_days !== null ? initialData.sla_review_days : 5);
+        setSlaGuaranteeEnabled(initialData.sla_guarantee_enabled !== undefined ? Boolean(initialData.sla_guarantee_enabled) : true);
 
         const mq = initialData.manual_questions;
         if (Array.isArray(mq)) {
@@ -109,6 +119,8 @@ export default function CreateJobModal({
         setPassingScore(70);
         setHasManualStage(false);
         setManualQuestions([]);
+        setSlaReviewDays(5);
+        setSlaGuaranteeEnabled(true);
       }
       setErrorMsg('');
     }
@@ -174,6 +186,69 @@ export default function CreateJobModal({
     setManualQuestions((prev) =>
       prev.map((q) => (q.id === id ? { ...q, [field]: value } : q))
     );
+  };
+
+  // AI Job Description Auto-Draft Handler
+  const handleAutoDraftJD = async () => {
+    const targetTitle = (title || '').trim();
+    const targetSkills = (requiredSkills || '').trim();
+    const effectiveTitle = targetTitle || targetSkills;
+
+    if (!effectiveTitle) {
+      alert('Please enter a Job Title or Required Skills (e.g. "Ai/LLm") before generating with AI.');
+      return;
+    }
+
+    if (!title && targetSkills) {
+      setTitle(targetSkills);
+    }
+
+    setIsDraftingJD(true);
+    setErrorMsg('');
+    try {
+      const payload = {
+        job_title: effectiveTitle,
+        keywords: targetSkills || undefined,
+        experience_level: experienceLevel || 'MID',
+        industry: category || 'Software Engineering',
+        workplace_type: workplaceType || 'ON_SITE',
+        tone: 'Professional',
+      };
+
+      const result = await jobService.generateAIJobDescription(payload);
+
+      const existingSkills = targetSkills
+        ? targetSkills.split(',').map((s) => s.trim()).filter(Boolean)
+        : [];
+      const newSkills = (result.required_skills || []).filter(
+        (ns) => !existingSkills.some((es) => es.toLowerCase() === ns.toLowerCase())
+      );
+      const mergedSkills = [...existingSkills, ...newSkills].join(', ');
+
+      const formattedDesc =
+        result.full_formatted_description || result.role_overview || '';
+
+      setDescription(formattedDesc);
+      if (mergedSkills) setRequiredSkills(mergedSkills);
+      if (!title && result.job_title) setTitle(result.job_title);
+      if (!minSalary && result.recommended_min_salary) {
+        setMinSalary(String(Math.round(result.recommended_min_salary)));
+      }
+      if (!maxSalary && result.recommended_max_salary) {
+        setMaxSalary(String(Math.round(result.recommended_max_salary)));
+      }
+      if (!experienceYearsRequired && result.experience_years) {
+        setExperienceYearsRequired(result.experience_years);
+      }
+    } catch (err) {
+      console.error('AI Draft failed:', err);
+      setErrorMsg(
+        err.response?.data?.detail ||
+          'Failed to auto-draft job description with Gemini AI. Please check inputs and retry.'
+      );
+    } finally {
+      setIsDraftingJD(false);
+    }
   };
 
   // Submit Handler
@@ -246,6 +321,8 @@ export default function CreateJobModal({
         passing_score: Number(passingScore) || 70,
         has_manual_stage: Boolean(hasManualStage),
         manual_questions: hasManualStage ? manualQuestions : null,
+        sla_review_days: parseInt(slaReviewDays, 10) || 5,
+        sla_guarantee_enabled: Boolean(slaGuaranteeEnabled),
         is_active: true,
       };
 
@@ -285,6 +362,34 @@ export default function CreateJobModal({
       title={initialData?.id ? 'Edit Job Listing & Assessment' : 'Create New Job Listing'}
     >
       <form onSubmit={handleSubmit} className="space-y-4 max-h-[78vh] overflow-y-auto pr-1">
+        {/* ✨ 1-Click AI Job Description Generator & Optimizer */}
+        <AISmartJobDescriptionAssistant
+          jobTitle={title}
+          skills={requiredSkills}
+          experienceLevel={experienceLevel}
+          category={category}
+          workplaceType={workplaceType}
+          onApplyGenerated={(gen) => {
+            if (gen.title) setTitle(gen.title);
+            if (gen.description) setDescription(gen.description);
+            if (gen.required_skills) {
+              setRequiredSkills(
+                Array.isArray(gen.required_skills)
+                  ? gen.required_skills.join(', ')
+                  : gen.required_skills
+              );
+            }
+            if (gen.experience_years_required !== undefined) {
+              setExperienceYearsRequired(gen.experience_years_required);
+            }
+            if (gen.min_salary) setMinSalary(String(gen.min_salary));
+            if (gen.max_salary) setMaxSalary(String(gen.max_salary));
+            if (gen.salary_range) setSalaryRange(gen.salary_range);
+            if (gen.experience_level) setExperienceLevel(gen.experience_level);
+            if (gen.workplace_type) setWorkplaceType(gen.workplace_type);
+          }}
+        />
+
         {errorMsg && (
           <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs font-semibold text-rose-600 dark:text-rose-400">
             {errorMsg}
@@ -464,13 +569,67 @@ export default function CreateJobModal({
           </div>
         </div>
 
+        {/* Candidate Review SLA Commitment (Anti-Ghosting) */}
+        <div className="p-3.5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 my-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
+              <span>🛡️ Review SLA Commitment (Anti-Ghosting Guarantee)</span>
+            </label>
+            <span className="text-[10px] text-cyan-400 font-mono">Guaranteed review deadline</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: "⚡ 3 Days (Fast-Track)", val: 3 },
+              { label: "⏱️ 5 Days (Standard)", val: 5 },
+              { label: "📅 7 Days (Extended)", val: 7 },
+            ].map((option) => (
+              <button
+                key={option.val}
+                type="button"
+                onClick={() => setSlaReviewDays(option.val)}
+                className={`py-2 px-2 text-xs rounded-lg border font-medium transition flex items-center justify-center cursor-pointer ${
+                  (slaReviewDays || 5) === option.val
+                    ? "bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-md shadow-cyan-500/20"
+                    : "bg-slate-900/80 border-slate-700 text-slate-300 hover:border-cyan-500/50"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-2">
+            Candidates will see an active countdown timer on their dashboard ensuring decisions are delivered within this timeframe.
+          </p>
+        </div>
+
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            Job Description & Responsibilities *
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Job Description & Responsibilities *
+            </label>
+            <button
+              type="button"
+              onClick={handleAutoDraftJD}
+              disabled={isDraftingJD}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline cursor-pointer disabled:opacity-50"
+              title="Auto-draft description from Job Title and Skills"
+            >
+              {isDraftingJD ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Drafting with Gemini...</span>
+                </>
+              ) : (
+                <>
+                  <Wand2 className="w-3.5 h-3.5" />
+                  <span>🪄 Generate from Title & Skills</span>
+                </>
+              )}
+            </button>
+          </div>
           <textarea
             required
-            rows={3}
+            rows={4}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -513,7 +672,7 @@ export default function CreateJobModal({
                 htmlFor="stage2-toggle"
                 className="text-xs font-bold text-slate-900 dark:text-white block cursor-pointer"
               >
-                Enable Recruiter Stage-2 Manual Assessment for Shortlisted Candidates
+                Enable Stage-2 Custom Manual Assessment for Shortlisted Candidates
               </label>
               <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
                 If enabled, shortlisted candidates must complete your custom questions before the final interview.

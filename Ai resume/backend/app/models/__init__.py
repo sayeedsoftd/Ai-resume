@@ -28,6 +28,10 @@ from app.models.subscription import (
 )
 from app.models.offer_letter import OfferLetter
 from app.models.recruiter_note import CandidateEvaluationNote, RecommendationType
+from app.models.career_roadmap import CandidateCareerRoadmap
+from app.models.daily_quiz import UserSkillProgress, DailyQuizSession
+from app.models.project_integrity import ProjectIntegrityAudit
+from app.models.chat_message import ChatMessage
 
 __all__ = [
     "Base",
@@ -58,4 +62,9 @@ __all__ = [
     "OfferLetter",
     "CandidateEvaluationNote",
     "RecommendationType",
+    "CandidateCareerRoadmap",
+    "UserSkillProgress",
+    "DailyQuizSession",
+    "ProjectIntegrityAudit",
+    "ChatMessage",
 ]

@@ -27,6 +27,7 @@ import {
   Shield,
   EyeOff,
   User,
+  Wand2,
 } from 'lucide-react';
 import { jobService } from '../../services/jobService';
 import { subscriptionService } from '../../services/subscriptionService';
@@ -37,6 +38,7 @@ import Badge from '../../components/ui/Badge';
 import { useNotifications } from '../../context/NotificationContext';
 import ApplicantDossierModal from '../../components/recruiter/ApplicantDossierModal';
 import ScheduleInterviewModal from '../../components/recruiter/ScheduleInterviewModal';
+import AISmartJobDescriptionAssistant from '../../components/jobs/AISmartJobDescriptionAssistant';
 import {
   maskCandidateDetails,
   getSavedBlindHiringPreference,
@@ -83,8 +85,12 @@ export default function RecruiterPanel() {
     has_manual_stage: false,
     manual_mcqs: [],
     manual_written: [],
+    sla_review_days: 5,
   });
+  const formData = jobForm;
+  const setFormData = setJobForm;
   const [submittingJob, setSubmittingJob] = useState(false);
+  const [isDraftingJD, setIsDraftingJD] = useState(false);
 
   useEffect(() => {
     fetchMyJobs();
@@ -138,6 +144,7 @@ export default function RecruiterPanel() {
       has_manual_stage: false,
       manual_mcqs: [],
       manual_written: [],
+      sla_review_days: 5,
     });
     setPostModalOpen(true);
   };
@@ -167,6 +174,7 @@ export default function RecruiterPanel() {
       has_manual_stage: Boolean(job.has_manual_stage),
       manual_mcqs: mq.mcqs || [],
       manual_written: mq.written || [],
+      sla_review_days: job.sla_review_days !== undefined && job.sla_review_days !== null ? job.sla_review_days : 5,
     });
     setPostModalOpen(true);
   };
@@ -243,6 +251,80 @@ export default function RecruiterPanel() {
     }));
   };
 
+  const handleAutoDraftJD = async () => {
+    const targetTitle = (jobForm.title || '').trim();
+    const targetSkills = (jobForm.skillsInput || '').trim();
+    const effectiveTitle = targetTitle || targetSkills;
+
+    if (!effectiveTitle) {
+      alert('Please enter a Job Title or Required Skills (e.g. "Ai/LLm") before generating with AI.');
+      return;
+    }
+
+    if (!jobForm.title && targetSkills) {
+      setJobForm((prev) => ({ ...prev, title: targetSkills }));
+    }
+
+    setIsDraftingJD(true);
+    try {
+      const payload = {
+        job_title: effectiveTitle,
+        keywords: targetSkills || undefined,
+        experience_level: jobForm.experience_level || 'MID',
+        industry: jobForm.category || 'Software Engineering',
+        workplace_type: jobForm.workplace_type || 'ON_SITE',
+        tone: 'Professional',
+      };
+
+      const result = await jobService.generateAIJobDescription(payload);
+
+      const existingSkills = targetSkills
+        ? targetSkills.split(',').map((s) => s.trim()).filter(Boolean)
+        : [];
+      const newSkills = (result.required_skills || []).filter(
+        (ns) => !existingSkills.some((es) => es.toLowerCase() === ns.toLowerCase())
+      );
+      const mergedSkills = [...existingSkills, ...newSkills].join(', ');
+
+      const formattedDesc =
+        result.full_formatted_description || result.role_overview || '';
+
+      setJobForm((prev) => ({
+        ...prev,
+        title: prev.title || result.job_title || effectiveTitle,
+        description: formattedDesc,
+        skillsInput: mergedSkills || prev.skillsInput,
+        min_salary:
+          !prev.min_salary && result.recommended_min_salary
+            ? String(Math.round(result.recommended_min_salary))
+            : prev.min_salary,
+        max_salary:
+          !prev.max_salary && result.recommended_max_salary
+            ? String(Math.round(result.recommended_max_salary))
+            : prev.max_salary,
+        experience_years_required:
+          !prev.experience_years_required && result.experience_years
+            ? result.experience_years
+            : prev.experience_years_required,
+      }));
+
+      triggerToast({
+        id: Date.now(),
+        title: 'AI Draft Generated! ✨',
+        message: `Job description & skills for '${effectiveTitle}' were generated with Gemini Pro.`,
+        type: 'SUCCESS',
+      });
+    } catch (err) {
+      console.error('AI Draft failed:', err);
+      alert(
+        err.response?.data?.detail ||
+          'Failed to auto-draft job description with Gemini AI. Please check inputs and retry.'
+      );
+    } finally {
+      setIsDraftingJD(false);
+    }
+  };
+
   const handleSaveJob = async (e) => {
     e.preventDefault();
     if (!jobForm.title || !jobForm.company_name || !jobForm.description) {
@@ -292,6 +374,8 @@ export default function RecruiterPanel() {
         passing_score: parseFloat(jobForm.passing_score) || 70,
         has_manual_stage: Boolean(jobForm.has_manual_stage),
         manual_questions: manualQuestions,
+        sla_review_days: parseInt(jobForm.sla_review_days, 10) || 5,
+        sla_guarantee_enabled: true,
         is_active: true,
       };
 
@@ -1144,6 +1228,42 @@ export default function RecruiterPanel() {
         }
       >
         <form onSubmit={handleSaveJob} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
+          {/* ✨ 1-Click AI Job Description Generator & Optimizer */}
+          <AISmartJobDescriptionAssistant
+            jobTitle={jobForm.title}
+            skills={jobForm.skillsInput}
+            experienceLevel={jobForm.experience_level}
+            category={jobForm.category}
+            workplaceType={jobForm.workplace_type}
+            onApplyGenerated={(gen) => {
+              setJobForm((prev) => ({
+                ...prev,
+                title: gen.title || prev.title,
+                description: gen.description || prev.description,
+                skillsInput: gen.required_skills
+                  ? Array.isArray(gen.required_skills)
+                    ? gen.required_skills.join(', ')
+                    : gen.required_skills
+                  : prev.skillsInput,
+                experience_years_required:
+                  gen.experience_years_required !== undefined
+                    ? gen.experience_years_required
+                    : prev.experience_years_required,
+                min_salary: gen.min_salary ? String(gen.min_salary) : prev.min_salary,
+                max_salary: gen.max_salary ? String(gen.max_salary) : prev.max_salary,
+                salary_range: gen.salary_range || prev.salary_range,
+                experience_level: gen.experience_level || prev.experience_level,
+                workplace_type: gen.workplace_type || prev.workplace_type,
+              }));
+              triggerToast({
+                id: Date.now(),
+                title: 'AI Draft Applied! ✨',
+                message: 'Job description, required skills, and salary recommendations updated.',
+                type: 'SUCCESS',
+              });
+            }}
+          />
+
           <Input
             label="Job Title *"
             placeholder="e.g. Senior Backend Engineer"
@@ -1557,12 +1677,66 @@ export default function RecruiterPanel() {
             )}
           </div>
 
+          {/* Candidate Review SLA Commitment (Anti-Ghosting) */}
+          <div className="p-3.5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 my-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
+                <span>🛡️ Review SLA Commitment (Anti-Ghosting Guarantee)</span>
+              </label>
+              <span className="text-[10px] text-cyan-400 font-mono">Guaranteed review deadline</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: "⚡ 3 Days (Fast-Track)", val: 3 },
+                { label: "⏱️ 5 Days (Standard)", val: 5 },
+                { label: "📅 7 Days (Extended)", val: 7 },
+              ].map((option) => (
+                <button
+                  key={option.val}
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, sla_review_days: option.val }))}
+                  className={`py-2 px-2 text-xs rounded-lg border font-medium transition flex items-center justify-center ${
+                    (formData?.sla_review_days || 5) === option.val
+                      ? "bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-md shadow-cyan-500/20"
+                      : "bg-slate-900/80 border-slate-700 text-slate-300 hover:border-cyan-500/50"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-2">
+              Candidates will see an active countdown timer on their dashboard ensuring decisions are delivered within this timeframe.
+            </p>
+          </div>
+
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Job Description & Responsibilities *
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Job Description & Responsibilities *
+              </label>
+              <button
+                type="button"
+                onClick={handleAutoDraftJD}
+                disabled={isDraftingJD}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline cursor-pointer disabled:opacity-50"
+                title="Auto-draft description from Job Title and Skills"
+              >
+                {isDraftingJD ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Drafting with Gemini...</span>
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-3.5 h-3.5" />
+                    <span>🪄 Generate from Title & Skills</span>
+                  </>
+                )}
+              </button>
+            </div>
             <textarea
-              rows={4}
+              rows={5}
               value={jobForm.description}
               onChange={(e) =>
                 setJobForm({ ...jobForm, description: e.target.value })

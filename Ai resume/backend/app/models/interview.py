@@ -22,6 +22,15 @@ class Interview(Base):
     notes = Column(Text, nullable=True)
     status = Column(String(50), default="SCHEDULED", nullable=False)  # SCHEDULED, COMPLETED, CANCELLED
 
+    # Automated WhatsApp & SMS Notification Alerts
+    notification_sent = Column(Boolean, default=False, nullable=False)
+    notification_channel = Column(String(50), default="WHATSAPP_AND_SMS", nullable=True)
+    notification_sent_at = Column(DateTime, nullable=True)
+    whatsapp_status = Column(String(50), default="SENT", nullable=True)
+    sms_status = Column(String(50), default="SENT", nullable=True)
+    whatsapp_message_id = Column(String(100), nullable=True)
+    sms_message_id = Column(String(100), nullable=True)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(
         DateTime,

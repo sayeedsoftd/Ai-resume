@@ -2,7 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { jobService } from '../../services/jobService';
+import { dailyQuizService } from '../../services/dailyQuizService';
+import { chatService } from '../../services/chatService';
 import {
   LayoutDashboard,
   FileText,
@@ -25,10 +28,16 @@ import {
   Mail,
   Inbox,
   Kanban,
+  Compass,
+  Flame,
+  MessageSquare,
+  CalendarCheck,
+  Search,
 } from 'lucide-react';
 
 const Sidebar = () => {
   const { user, isSuperAdmin, isSubscriber, isRecruiter, isVerified, viewMode } = useAuth();
+  const { t } = useLanguage();
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -36,8 +45,11 @@ const Sidebar = () => {
   const { notifications } = useNotifications();
 
   const [candidateUnreadCount, setCandidateUnreadCount] = useState(0);
+  const [candidateInquiriesUnreadCount, setCandidateInquiriesUnreadCount] = useState(0);
   const [recruiterUnreadCount, setRecruiterUnreadCount] = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [candidateApplicationsCount, setCandidateApplicationsCount] = useState(null);
+  const [dailyStreak, setDailyStreak] = useState(null);
 
   const userRole = user?.role?.toUpperCase();
   const isRecruiterUser = userRole === 'RECRUITER' || userRole === 'SUBSCRIBER' || isSubscriber || isRecruiter || viewMode === 'recruiter';
@@ -81,72 +93,116 @@ const Sidebar = () => {
           }
         })
         .catch(() => setCandidateApplicationsCount(null));
+
+      dailyQuizService
+        .getTodayQuiz()
+        .then((res) => {
+          if (res?.current_streak_days !== undefined) {
+            setDailyStreak(res.current_streak_days);
+          }
+        })
+        .catch(() => {});
+
+      jobService
+        .getCandidateUnreadInquiriesCount()
+        .then((res) => setCandidateInquiriesUnreadCount(res?.unread_count ?? 0))
+        .catch(() => {});
     }
+
+    // Direct Live Chat unread count for both recruiters and candidates
+    chatService
+      .getUnreadCount()
+      .then((res) => setChatUnreadCount(res?.unread_count ?? 0))
+      .catch(() => {});
   }, [user, isRecruiterUser, location.pathname, notifications]);
 
   // 1. Super Admin View Navigation with distinct paths and explicit tabKey
   const adminNav = [
-    { name: 'Admin Overview', path: '/admin', tabKey: 'overview', icon: LayoutDashboard },
-    { name: 'KYC Moderation', path: '/admin/kyc', tabKey: 'kyc', icon: UserCheck },
-    { name: 'Payment & Recruiter KYC', path: '/admin/payments', tabKey: 'payments', icon: ShieldAlert },
-    { name: 'Recruiter Dashboard', path: '/recruiter', icon: Building2 },
-    { name: 'Shortlisted Candidates', path: '/recruiter/shortlisted', icon: UserCheck },
-    { name: 'Job Requisitions', path: '/jobs', icon: Briefcase },
-    { name: 'System Resumes', path: '/resumes', icon: FileText },
+    { name: t('nav.admin_overview', 'Admin Overview'), path: '/admin', tabKey: 'overview', icon: LayoutDashboard },
+    { name: t('nav.kyc_moderation', 'KYC Moderation'), path: '/admin/kyc', tabKey: 'kyc', icon: UserCheck },
+    { name: t('nav.payment_moderation', 'Payment & Recruiter KYC'), path: '/admin/payments', tabKey: 'payments', icon: ShieldAlert },
+    { name: t('nav.recruiter_dashboard', 'Recruiter Dashboard'), path: '/recruiter', icon: Building2 },
+    { name: t('nav.talent_search', 'Talent Search Engine'), path: '/recruiter/talent-search', icon: Search },
+    { name: t('nav.shortlisted_candidates', 'Shortlisted Candidates'), path: '/recruiter/shortlisted', icon: UserCheck },
+    { name: t('nav.job_requisitions', 'Job Requisitions'), path: '/jobs', icon: Briefcase },
+    { name: t('nav.system_resumes', 'System Resumes'), path: '/resumes', icon: FileText },
   ];
 
   // 2. Recruiter View Navigation (for RECRUITERS & SUBSCRIBERS)
   const recruiterNav = [
-    { name: 'Recruiter Dashboard', path: '/recruiter', icon: Building2 },
+    { name: t('nav.recruiter_dashboard', 'Recruiter Dashboard'), path: '/recruiter', icon: Building2 },
+    { name: t('nav.talent_search', 'Talent Search Engine'), path: '/recruiter/talent-search', icon: Search },
     {
-      name: 'Candidate Inquiries',
+      name: t('nav.live_chat_hub', 'Direct Live Chat'),
+      path: '/messages',
+      icon: MessageSquare,
+      badge: chatUnreadCount > 0 ? chatUnreadCount : null,
+      badgeColor: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300',
+    },
+    {
+      name: t('nav.candidate_inquiries', 'Candidate Inquiries'),
       path: '/recruiter/inquiries',
       icon: Mail,
       badge: recruiterUnreadCount > 0 ? recruiterUnreadCount : null,
     },
-    { name: 'Shortlisted Candidates', path: '/recruiter/shortlisted', icon: UserCheck },
-    { name: 'My Posted Jobs', path: '/jobs', icon: Briefcase },
-    { name: 'KYC Verification', path: '/kyc', icon: ShieldAlert },
-    { name: 'Company Profile', path: '/recruiter/company-profile', icon: Building2 },
+    { name: t('nav.shortlisted_candidates', 'Shortlisted Candidates'), path: '/recruiter/shortlisted', icon: UserCheck },
+    { name: t('nav.my_posted_jobs', 'My Posted Jobs'), path: '/jobs', icon: Briefcase },
+    { name: t('nav.kyc_verification', 'KYC Verification'), path: '/kyc', icon: ShieldAlert },
+    { name: t('nav.company_profile', 'Company Profile'), path: '/recruiter/company-profile', icon: Building2 },
   ];
 
   // 3. Candidate View Navigation (strictly for CANDIDATES)
   const candidateNav = [
-    { name: 'Candidate Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { name: t('nav.candidate_dashboard', 'Candidate Dashboard'), path: '/dashboard', icon: LayoutDashboard },
     {
-      name: 'Application Tracker',
+      name: t('nav.application_tracker', 'Application Tracker'),
       path: '/candidate/applications',
       icon: Kanban,
       badge: candidateApplicationsCount > 0 ? candidateApplicationsCount : null,
       badgeColor: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300',
     },
     {
-      name: 'Received Messages',
+      name: t('nav.received_messages', 'Received Messages'),
       path: '/candidate/messages',
-      icon: Mail,
-      badge: candidateUnreadCount > 0 ? candidateUnreadCount : null,
+      icon: MessageSquare,
+      badge: (candidateUnreadCount + chatUnreadCount) > 0 ? (candidateUnreadCount + chatUnreadCount) : null,
       badgeColor: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
     },
-    { name: 'AI Resume Gap Analyzer', path: '/dashboard?tab=gap-analyzer', tabKey: 'gap-analyzer', icon: Target },
-    { name: 'Live Resume Builder', path: '/resume-builder', icon: Sparkles },
-    { name: 'My Resumes & ATS', path: '/resumes', icon: FileText },
-    { name: 'Find Job Matches', path: '/candidate/jobs', icon: Briefcase },
-    { name: 'KYC Verification', path: '/kyc', icon: UserCheck },
-    { name: 'Formal CV Profile', path: '/profile', icon: User },
+    {
+      name: t('nav.recruiter_inquiries', 'Recruiter Inquiries'),
+      path: '/recruiter-inquiries',
+      icon: CalendarCheck,
+      badge: candidateInquiriesUnreadCount > 0 ? candidateInquiriesUnreadCount : null,
+      badgeColor: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-500/30',
+    },
+    {
+      name: t('nav.daily_skill_drill', 'Daily Skill Drill'),
+      path: '/daily-quiz',
+      icon: Flame,
+      badge: dailyStreak && dailyStreak > 0 ? `🔥 ${dailyStreak}d` : 'Daily',
+      badgeColor: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-500/30',
+    },
+    { name: t('nav.resume_gap_analyzer', 'AI Resume Gap Analyzer'), path: '/dashboard?tab=gap-analyzer', tabKey: 'gap-analyzer', icon: Target },
+    { name: t('nav.career_mentor', 'AI Career Roadmap Mentor'), path: '/dashboard?tab=roadmap', tabKey: 'roadmap', icon: Compass },
+    { name: t('nav.live_resume_builder', 'Live Resume Builder'), path: '/resume-builder', icon: Sparkles },
+    { name: t('nav.my_resumes', 'My Resumes & ATS'), path: '/resumes', icon: FileText },
+    { name: t('nav.find_job_matches', 'Find Job Matches'), path: '/candidate/jobs', icon: Briefcase },
+    { name: t('nav.kyc_verification', 'KYC Verification'), path: '/kyc', icon: UserCheck },
+    { name: t('nav.profile_cv', 'Formal CV Profile'), path: '/profile', icon: User },
   ];
 
   // Pick navigation strictly by role separation
   let navItems = candidateNav;
-  let panelTitle = 'Candidate Cockpit';
+  let panelTitle = t('common.view_as_candidate', 'Candidate Cockpit');
   let badgeColor = 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300';
 
   if (isSuperAdminUser && viewMode === 'admin') {
     navItems = adminNav;
-    panelTitle = 'Super Admin Console';
+    panelTitle = t('common.view_as_admin', 'Super Admin Console');
     badgeColor = 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300';
   } else if (isRecruiterUser) {
     navItems = recruiterNav;
-    panelTitle = 'Recruiter Portal';
+    panelTitle = t('common.view_as_recruiter', 'Recruiter Portal');
     badgeColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300';
   }
 
@@ -154,6 +210,9 @@ const Sidebar = () => {
   const isNavActive = (item) => {
     if (item.path === '/recruiter') {
       return location.pathname === '/recruiter';
+    }
+    if (item.path === '/recruiter/talent-search') {
+      return location.pathname === '/recruiter/talent-search';
     }
     if (item.path === '/recruiter/shortlisted') {
       return location.pathname === '/recruiter/shortlisted';
@@ -167,8 +226,18 @@ const Sidebar = () => {
         location.pathname === '/recruiter/company'
       );
     }
-    if (item.path === '/candidate/messages') {
-      return location.pathname === '/candidate/messages';
+    if (item.path === '/candidate/messages' || item.path === '/messages') {
+      return location.pathname === '/candidate/messages' || location.pathname === '/messages';
+    }
+    if (item.path === '/recruiter-inquiries') {
+      return location.pathname === '/recruiter-inquiries';
+    }
+    if (item.path === '/daily-quiz') {
+      return (
+        location.pathname === '/daily-quiz' ||
+        location.pathname === '/candidate/daily-quiz' ||
+        (location.pathname === '/dashboard' && currentTab === 'daily-quiz')
+      );
     }
 
     if (isSuperAdminUser && viewMode === 'admin') {
@@ -227,7 +296,7 @@ const Sidebar = () => {
     if (item.path === '/dashboard') {
       return (
         location.pathname === '/dashboard' &&
-        (!currentTab || (currentTab !== 'tracker' && currentTab !== 'gap-analyzer'))
+        (!currentTab || (currentTab !== 'tracker' && currentTab !== 'gap-analyzer' && currentTab !== 'roadmap'))
       );
     }
     if (item.path === '/dashboard?tab=tracker') {
@@ -243,8 +312,25 @@ const Sidebar = () => {
         location.pathname === '/gap-analyzer'
       );
     }
-    if (item.path === '/candidate/messages') {
-      return location.pathname === '/candidate/messages';
+    if (item.path === '/dashboard?tab=roadmap') {
+      return (
+        (location.pathname === '/dashboard' && currentTab === 'roadmap') ||
+        location.pathname === '/career-roadmap' ||
+        location.pathname === '/candidate/roadmap'
+      );
+    }
+    if (item.path === '/candidate/messages' || item.path === '/messages') {
+      return location.pathname === '/candidate/messages' || location.pathname === '/messages';
+    }
+    if (item.path === '/recruiter-inquiries') {
+      return location.pathname === '/recruiter-inquiries';
+    }
+    if (item.path === '/daily-quiz') {
+      return (
+        location.pathname === '/daily-quiz' ||
+        location.pathname === '/candidate/daily-quiz' ||
+        (location.pathname === '/dashboard' && currentTab === 'daily-quiz')
+      );
     }
     if (item.path === '/resume-builder' || item.path === '/live-resume-builder') {
       return (
